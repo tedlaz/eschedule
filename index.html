@@ -11,6 +11,7 @@
 <body>
   <div class="container">
     <h1>📅 Εβδομαδιαίο Πρόγραμμα Εργασίας</h1>
+    <p id="companyName" class="company-name" onclick="editCompanyName()">Προσθέστε όνομα εταιρείας…</p>
 
     <div class="summary-cards" id="summaryCards">
       <!-- Populated by JavaScript -->
@@ -28,6 +29,7 @@
       <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
       <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">📤</button>
       <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή αρχείου">📥</button>
+      <button class="btn-danger" onclick="resetAllData()" title="Καθαρισμός όλων των δεδομένων">✕</button>
 
       <div class="selection-actions" id="selectionActions">
         <!-- Populated by JavaScript when cells are selected -->
@@ -389,7 +391,9 @@
     </div>
   </div>
 
+  <script src="payroll.js"></script>
   <script src="config.js"></script>
+  <script src="argies.js"></script>
   <script src="adeies.js"></script>
   <script src="script.js"></script>
 </body>

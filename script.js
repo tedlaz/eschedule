@@ -18,6 +18,7 @@ const DEFAULT_BUSINESS_HOURS = window.DEFAULT_BUSINESS_HOURS || {
 
 let data = {
   employees: [],
+  companyName: '',
   defaultBusinessHours: JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
   defaultEmployeeSettings: { workingHours: 40, restDays: [5, 6], hourlyRate: 10 },
   payrollRules: {
@@ -33,6 +34,7 @@ let data = {
   weekRestDays: {}, // key: "YYYY-MM-DD_employeeId", value: array of rest day indices
   weekEmployeeSettings: {}, // key: "YYYY-MM-DD_employeeVat", value: {workingHours}
   weekHolidays: {}, // key: "YYYY-MM-DD" (Monday of week), value: array of day indices (0-6) that are holidays
+  customHolidayNames: {}, // key: "YYYY-MM-DD", value: custom holiday name string
   shifts: {}, // key: "employeeId_YYYY-MM-DD", value: shift object
 }
 
@@ -114,7 +116,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function renderAll() {
   renderSchedule()
-  // updateSummary()
+  renderCompanyName()
+}
+
+function renderCompanyName() {
+  const el = document.getElementById('companyName')
+  if (!el) return
+  const name = String(data.companyName || '').trim()
+  el.textContent = name || 'Προσθέστε όνομα εταιρείας…'
+  el.classList.toggle('company-name-placeholder', !name)
+}
+
+function editCompanyName() {
+  const el = document.getElementById('companyName')
+  if (!el) return
+  const current = String(data.companyName || '').trim()
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.value = current
+  input.className = 'company-name-input'
+  input.placeholder = 'Όνομα εταιρείας'
+  input.maxLength = 100
+  el.replaceWith(input)
+  input.focus()
+  input.select()
+  const commit = () => {
+    data.companyName = input.value.trim()
+    saveData()
+    const p = document.createElement('p')
+    p.id = 'companyName'
+    p.className = 'company-name'
+    p.onclick = editCompanyName
+    input.replaceWith(p)
+    renderCompanyName()
+  }
+  input.addEventListener('blur', commit)
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      input.blur()
+    }
+    if (e.key === 'Escape') {
+      input.value = current
+      input.blur()
+    }
+  })
 }
 
 function getMonday(date) {
@@ -150,10 +196,30 @@ function getBusinessHoursForWeek() {
   return data.weekBusinessHours[weekKey]
 }
 
+function autoDetectGreekHolidaysForWeek(weekStart) {
+  if (typeof greekAllHolidaysForYear !== 'function') return []
+  const years = new Set()
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    years.add(d.getFullYear())
+  }
+  const allHolidays = []
+  years.forEach((yr) => allHolidays.push(...greekAllHolidaysForYear(yr)))
+  const indices = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    const dStr = formatDate(d)
+    if (allHolidays.some((h) => formatDate(h) === dStr)) indices.push(i)
+  }
+  return indices
+}
+
 function getHolidaysForWeek() {
   const weekKey = getWeekKey()
   if (!data.weekHolidays[weekKey]) {
-    data.weekHolidays[weekKey] = []
+    data.weekHolidays[weekKey] = autoDetectGreekHolidaysForWeek(currentWeekStart)
   }
   return data.weekHolidays[weekKey]
 }
@@ -325,8 +391,9 @@ function renderSchedule() {
       : '<div class="business-hours">Closed</div>'
 
     html += `<th class="${thClass} clickable" onclick="openTimelineModal(${i})">
-                ${DAY_ABBREV[i]}${isHoliday ? ' 🎉' : ''}${isSunday ? ' ☀️' : ''}<br>
+                ${DAY_ABBREV[i]}<br>
                 <small>${dayDate.getDate()}</small>
+                ${isHoliday ? `<div class="holiday-name">${getHolidayName(formatDate(dayDate))}</div>` : ''}
                 ${hoursDisplay}
                 ${(isHoliday || isSunday) && !isClosed ? '<div class="premium-badge">+75%</div>' : ''}
             </th>`
@@ -937,9 +1004,15 @@ function calculateMonthlyOverworkExtra(employeeId, monthKey, monthlySalary, week
     weekHoursMap[wk] = (weekHoursMap[wk] || 0) + shiftTotalHours(shift)
   })
 
-  const extraHours = Object.values(weekHoursMap).reduce((acc, h) => acc + Math.max(0, Number(h || 0) - 40), 0)
-  const hourlyBase = Number(monthlySalary || 0) * 0.006 // salary/25*6/40
-  const extraPay = extraHours * hourlyBase * 1.2 // +20% υπερεργασία
+  const _PR2 = window.PAYROLL_RULES || {}
+  const _weekNorm = _PR2.weeklyNormalMax ?? 40
+  const _mwd = _PR2.monthlyWorkingDays ?? 25
+  const extraHours = Object.values(weekHoursMap).reduce(
+    (acc, h) => acc + Math.max(0, Number(h || 0) - _weekNorm),
+    0,
+  )
+  const hourlyBase = (Number(monthlySalary || 0) * 6) / (_mwd * _weekNorm)
+  const extraPay = extraHours * hourlyBase * (_PR2.multipliers?.ye ?? 1.2) // +20% υπερεργασία
   return {
     extraHours: Math.round(extraHours * 100) / 100,
     extraPay: Math.round(extraPay * 100) / 100,
@@ -1008,16 +1081,13 @@ function calculateNightHours(start, end) {
   let endMin = eh * 60 + em
   if (endMin <= startMin) endMin += 24 * 60 // overnight shift
 
+  const _PR1 = window.PAYROLL_RULES || {}
+  const _nightStartMin1 = _PR1.nightStartMinutes ?? 1320
+  const _nightEndMin1 = _PR1.nightEndMinutes ?? 360
   let nightMinutes = 0
-  // Night period 1: 00:00-06:00 (0 to 360 minutes)
-  // Night period 2: 22:00-24:00 (1320 to 1440 minutes)
-  // For overnight: also 24:00-30:00 maps to 00:00-06:00 next day
-
   for (let m = startMin; m < endMin; m++) {
     const timeInDay = m % (24 * 60)
-    if (timeInDay >= 0 && timeInDay < 360)
-      nightMinutes++ // 00:00-06:00
-    else if (timeInDay >= 1320) nightMinutes++ // 22:00-24:00
+    if (timeInDay < _nightEndMin1 || timeInDay >= _nightStartMin1) nightMinutes++
   }
 
   return Math.round((nightMinutes / 60) * 10) / 10
@@ -1041,10 +1111,11 @@ function calculateShiftPremiums(shift, dayIndex) {
   let sundayHolidayExtra = 0
   let nightExtra = 0
 
+  const _PR3 = window.PAYROLL_RULES || {}
   if (isSundayOrHoliday) {
-    sundayHolidayExtra = totalHours * 0.75
+    sundayHolidayExtra = totalHours * (_PR3.withinHolidayAdd ?? 0.75)
   }
-  nightExtra = nightHours * 0.25
+  nightExtra = nightHours * (_PR3.withinNightAdd ?? 0.25)
 
   return {
     totalHours,
@@ -1067,7 +1138,8 @@ function calculateWeekCost(employeeId, weekStart) {
     const monthlySalary = Number(emp.monthlySalary || 0)
     const weeklyBase = Math.round(((monthlySalary * 12) / 52) * 100) / 100
     const absDays = countMonthlyAbsenceDaysInWeek(employeeId, weekStart, Number(emp.weekWorkingDays || 5))
-    const weeklyDeduction = Math.round((monthlySalary / 25) * absDays * 100) / 100
+    const weeklyDeduction =
+      Math.round((monthlySalary / (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) * absDays * 100) / 100
     const weeklyCost = Math.max(0, Math.round((weeklyBase - weeklyDeduction) * 100) / 100)
     return {
       totalHours,
@@ -1797,6 +1869,13 @@ function clearShift() {
   renderAll()
 }
 
+function getHolidayName(dateStr) {
+  const custom = data.customHolidayNames?.[dateStr]
+  if (custom) return custom
+  if (typeof greekHolidayNameForDate === 'function') return greekHolidayNameForDate(dateStr) || ''
+  return ''
+}
+
 // Business Hours Modal (per week)
 function openBusinessHoursModal() {
   const modal = document.getElementById('businessHoursModal')
@@ -1808,14 +1887,19 @@ function openBusinessHoursModal() {
   DAYS.forEach((day, i) => {
     const bh = businessHours[i]
     const isHoliday = holidays.includes(i)
+    const dayDate = new Date(currentWeekStart)
+    dayDate.setDate(dayDate.getDate() + i)
+    const dateStr = formatDate(dayDate)
+    const holidayName = getHolidayName(dateStr)
     html += `
       <div class="form-group" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
           <label style="min-width: 100px; margin-bottom: 0;">${day}</label>
           <div class="checkbox-item">
-            <input type="checkbox" id="holiday${i}" ${isHoliday ? 'checked' : ''}>
-            <label for="holiday${i}">🎉 Αργία</label>
+            <input type="checkbox" id="holiday${i}" ${isHoliday ? 'checked' : ''} onchange="toggleHolidayNameInput(${i})">
+            <label for="holiday${i}">Αργία</label>
           </div>
+          <input type="text" id="holidayName${i}" value="${holidayName}" placeholder="Όνομα αργίας" style="width:160px; display:${isHoliday ? 'block' : 'none'}">
           <input type="text" id="bhOpen${i}" value="${bh.open}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
           <span>to</span>
           <input type="text" id="bhClose${i}" value="${bh.close}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
@@ -1824,6 +1908,12 @@ function openBusinessHoursModal() {
   })
   form.innerHTML = html
   modal.classList.add('active')
+}
+
+function toggleHolidayNameInput(i) {
+  const checked = document.getElementById(`holiday${i}`)?.checked
+  const nameEl = document.getElementById(`holidayName${i}`)
+  if (nameEl) nameEl.style.display = checked ? 'block' : 'none'
 }
 
 function toggleBusinessDay(dayIndex) {
@@ -1835,11 +1925,8 @@ function toggleBusinessDay(dayIndex) {
 function copyFromDefaultHours() {
   DAYS.forEach((day, i) => {
     const bh = data.defaultBusinessHours[i]
-    document.getElementById(`closed${i}`).checked = bh.closed
     document.getElementById(`bhOpen${i}`).value = bh.open
     document.getElementById(`bhClose${i}`).value = bh.close
-    document.getElementById(`bhOpen${i}`).disabled = bh.closed
-    document.getElementById(`bhClose${i}`).disabled = bh.closed
     document.getElementById(`holiday${i}`).checked = false
   })
 }
@@ -1853,15 +1940,32 @@ function saveBusinessHours() {
   DAYS.forEach((day, i) => {
     const open = document.getElementById(`bhOpen${i}`).value
     const close = document.getElementById(`bhClose${i}`).value
-    const closed = document.getElementById(`closed${i}`).checked
     const isHoliday = document.getElementById(`holiday${i}`).checked
+    const holidayNameRaw = String(document.getElementById(`holidayName${i}`)?.value || '').trim()
 
-    if (!closed && (!isValidTime24h(open) || !isValidTime24h(close))) {
+    if (!isValidTime24h(open) || !isValidTime24h(close)) {
       hasError = true
     }
 
-    weekHours[i] = { open, close, closed }
-    if (isHoliday) holidays.push(i)
+    weekHours[i] = { open, close, closed: false }
+    if (isHoliday) {
+      holidays.push(i)
+      const dayDate = new Date(currentWeekStart)
+      dayDate.setDate(dayDate.getDate() + i)
+      const dateStr = formatDate(dayDate)
+      if (holidayNameRaw) {
+        if (!data.customHolidayNames) data.customHolidayNames = {}
+        data.customHolidayNames[dateStr] = holidayNameRaw
+      } else {
+        delete data.customHolidayNames?.[dateStr]
+      }
+    } else {
+      // If unchecked, remove any stored custom name for this date
+      const dayDate = new Date(currentWeekStart)
+      dayDate.setDate(dayDate.getDate() + i)
+      const dateStr = formatDate(dayDate)
+      delete data.customHolidayNames?.[dateStr]
+    }
   })
 
   if (hasError) {
@@ -2229,6 +2333,24 @@ async function clearPersistedState() {
   } catch {}
 }
 
+async function resetAllData() {
+  if (
+    !confirm('Να διαγραφούν ΟΛΑ τα δεδομένα (εργαζόμενοι, βάρδιες, αργίες) και να ξεκινήσετε από την αρχή;')
+  )
+    return
+  await clearPersistedState()
+  data = normalizeLoadedState({})
+  currentWeekStart = getMonday(new Date())
+  selectedCells = []
+  isMultiSelectMode = false
+  const btn = document.getElementById('multiSelectBtn')
+  if (btn) {
+    btn.classList.remove('btn-active')
+    btn.textContent = '☐'
+  }
+  renderAll()
+}
+
 function normalizeShiftKey(rawKey) {
   const m = String(rawKey || '').match(/^(.+?)_(.+)$/)
   if (!m) return String(rawKey || '').trim()
@@ -2347,7 +2469,30 @@ function sanitizeStateForPersist(state) {
 
   out.shifts = cleanShifts
   out.weekBusinessHours = filterWeekMapToActive(state.weekBusinessHours || {})
-  out.weekHolidays = sortObjectByDateKey(filterWeekMapToActive(state.weekHolidays || {}))
+  // Keep weekHolidays for active weeks AND for any week that has at least one holiday
+  // (manual or auto-detected), so holidays are not wiped on weeks without working shifts.
+  const rawHolidays = state.weekHolidays || {}
+  const filteredHolidays = {}
+  Object.keys(rawHolidays)
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .forEach((wk) => {
+      const entries = rawHolidays[wk]
+      if (activeWeeks.has(String(wk)) || (Array.isArray(entries) && entries.length > 0)) {
+        filteredHolidays[wk] = entries
+      }
+    })
+  out.weekHolidays = filteredHolidays
+  // Persist custom holiday names, keeping only entries with a non-empty name
+  const rawCustomNames = state.customHolidayNames || {}
+  const cleanCustomNames = {}
+  Object.keys(rawCustomNames)
+    .sort()
+    .forEach((k) => {
+      const v = String(rawCustomNames[k] || '').trim()
+      if (v) cleanCustomNames[k] = v
+    })
+  out.customHolidayNames = cleanCustomNames
+  out.companyName = String(state.companyName || '')
   out.weekRestDays = {}
   out.weekEmployeeSettings = {}
   out.__meta = { savedAt: Date.now() }
@@ -2484,6 +2629,8 @@ function normalizeLoadedState(loaded) {
     weekRestDays: loaded.weekRestDays || {},
     weekEmployeeSettings: loaded.weekEmployeeSettings || {},
     weekHolidays: loaded.weekHolidays || {},
+    customHolidayNames: loaded.customHolidayNames || {},
+    companyName: String(loaded.companyName || ''),
     shifts: loaded.shifts || {},
   }
 }
@@ -2639,6 +2786,16 @@ function isHolidayOrSundayDate(dayStr) {
   return dayIdx === 6 || holidayIdxs.has(dayIdx)
 }
 
+// Returns true only for official/manual holidays — NOT Sundays.
+function isOfficialHolidayDate(dayStr) {
+  const d = parseISODateLocal(dayStr)
+  if (isNaN(d.getTime())) return false
+  const dayIdx = (d.getDay() + 6) % 7
+  const wk = getWeekKeyFromDateStr(dayStr)
+  const holidayIdxs = new Set((data.weekHolidays || {})[wk] || [])
+  return holidayIdxs.has(dayIdx) // dayIdx===6 (Sunday) intentionally excluded
+}
+
 function shiftRangeToSlices(dayStr, start, end, originType = 'ΕΡΓ') {
   if (!isValidTime24h(start || '') || !isValidTime24h(end || '')) return []
   const startMin = toMinutes(start)
@@ -2655,8 +2812,11 @@ function shiftRangeToSlices(dayStr, start, end, originType = 'ΕΡΓ') {
       day: actualDay,
       sourceDay: dayStr,
       hours: dur / 60,
-      isNight: minuteInDay < 360 || minuteInDay >= 1320,
+      isNight:
+        minuteInDay < (window.PAYROLL_RULES?.nightEndMinutes ?? 360) ||
+        minuteInDay >= (window.PAYROLL_RULES?.nightStartMinutes ?? 1320),
       isHoliday: isHolidayOrSundayDate(dayStr),
+      isOfficialHoliday: isOfficialHolidayDate(dayStr),
       shiftType: originType === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ',
       absOrder: `${actualDay}T${String(Math.floor(minuteInDay / 60)).padStart(2, '0')}:${String(minuteInDay % 60).padStart(2, '0')}`,
     })
@@ -2691,22 +2851,32 @@ function classifyWeekSlices(employeeId, weekKey) {
   const byShiftDayWorked = {}
   let weekWorked = 0
 
+  const _PR4 = window.PAYROLL_RULES || {}
+  const _dailyIllegal = _PR4.dailyIllegalThreshold ?? 11
+  const _dailyYp = _PR4.dailyYpThreshold ?? 9
+  const _dailyYe = _PR4.dailyYeThreshold ?? 8
+  const _weekNorm4 = _PR4.weeklyNormalMax ?? 40
+  const _weekYe4 = _PR4.weeklyYeMax ?? 45
+
   return filtered.map((sl) => {
     const thresholdDay = sl.sourceDay || sl.day
     const dayWorked = byShiftDayWorked[thresholdDay] || 0
     let category = 'within'
-
-    if (dayWorked >= 11)
+    if (dayWorked >= _dailyIllegal)
       category = 'illegal' // 12η+
-    else if (dayWorked >= 9)
+    else if (dayWorked >= _dailyYp)
       category = 'yp' // 10η-11η
-    else if (dayWorked >= 8)
+    else if (dayWorked >= _dailyYe)
       category = 'ye' // 9η
-    else if (Number(weekTarget || 40) < 40 && weekWorked >= Number(weekTarget || 40) && weekWorked < 40)
+    else if (
+      Number(weekTarget || _weekNorm4) < _weekNorm4 &&
+      weekWorked >= Number(weekTarget || _weekNorm4) &&
+      weekWorked < _weekNorm4
+    )
       category = 'additional'
-    else if (weekWorked >= 40 && weekWorked < 45)
-      category = 'ye' // εβδομαδιαία 40->45
-    else if (weekWorked >= 45) category = 'yp'
+    else if (weekWorked >= _weekNorm4 && weekWorked < _weekYe4)
+      category = 'ye' // εβδομαδιαία
+    else if (weekWorked >= _weekYe4) category = 'yp'
 
     byShiftDayWorked[thresholdDay] = dayWorked + sl.hours
     weekWorked += sl.hours
@@ -2745,8 +2915,10 @@ const PAYROLL_CATEGORIES = [
 const PAYROLL_BUCKET_KEYS = PAYROLL_CATEGORIES.flatMap((c) => [
   `${c.key}_work_day`,
   `${c.key}_work_night`,
-  `${c.key}_holiday_day`,
+  `${c.key}_holiday_day`, // official public holiday
   `${c.key}_holiday_night`,
+  `${c.key}_sunday_day`, // Sunday (not official holiday)
+  `${c.key}_sunday_night`,
 ])
 
 function emptyPayrollBuckets() {
@@ -2757,31 +2929,42 @@ function emptyPayrollBuckets() {
   return out
 }
 
-function payrollBucketKey(category, isHoliday, isNight) {
-  return `${category}_${isHoliday ? 'holiday' : 'work'}_${isNight ? 'night' : 'day'}`
+function payrollBucketKey(category, isHoliday, isNight, isOfficialHoliday = true) {
+  const dayType = isHoliday ? (isOfficialHoliday ? 'holiday' : 'sunday') : 'work'
+  return `${category}_${dayType}_${isNight ? 'night' : 'day'}`
 }
 
 function bucketPayMultiplier(bucketKey) {
   const isNight = String(bucketKey).endsWith('_night')
-  const isHoliday = String(bucketKey).includes('_holiday_')
+  const isOfficialHoliday = String(bucketKey).includes('_holiday_')
+  const isSunday = String(bucketKey).includes('_sunday_')
+  const isHolidayOrSunday = isOfficialHoliday || isSunday
   const cat = String(bucketKey).split('_')[0]
 
+  const PR = window.PAYROLL_RULES || {}
+  const mults = PR.multipliers || {}
   const baseFactorMap = {
-    within: 0,
-    additional: 1.12,
-    ye: 1.2,
-    yp: 1.4,
-    illegal: 1.8,
+    within: mults.within ?? 0,
+    additional: mults.additional ?? 1.12,
+    ye: mults.ye ?? 1.2,
+    yp: mults.yp ?? 1.4,
+    illegal: mults.illegal ?? 1.8,
   }
 
   const base = Number(baseFactorMap[cat] ?? 0)
   if (cat === 'within') {
-    return (isNight ? 0.25 : 0) + (isHoliday ? 0.75 : 0)
+    const nightAdd = isNight ? (PR.withinNightAdd ?? 0.25) : 0
+    const holidayAdd = isHolidayOrSunday ? (PR.withinHolidayAdd ?? 0.75) : 0
+    // Official holiday (incl. when it falls on Sunday): base hour + 75% = ×1.75
+    // Plain Sunday within contracted hours: +75% extra only (base in salary)
+    const holidayBase = isOfficialHoliday && PR.holidayHoursFullyPaid !== false ? 1 : 0
+    return nightAdd + holidayAdd + holidayBase
   }
 
+  // Overtime/additional categories: both official holidays and Sundays get ×1.75
   let mult = base
-  if (isNight) mult *= 1.25
-  if (isHoliday) mult *= 1.75
+  if (isNight) mult *= PR.nightPremiumFactor ?? 1.25
+  if (isHolidayOrSunday) mult *= PR.holidayPremiumFactor ?? 1.75
   return mult
 }
 
@@ -2795,7 +2978,7 @@ function getEmployeeDayBucketMetrics(employeeId, day) {
   const out = emptyPayrollBuckets()
   slices.forEach((s) => {
     const cat = ['within', 'additional', 'ye', 'yp', 'illegal'].includes(s.category) ? s.category : 'within'
-    const k = payrollBucketKey(cat, !!s.isHoliday, !!s.isNight)
+    const k = payrollBucketKey(cat, !!s.isHoliday, !!s.isNight, !!s.isOfficialHoliday)
     out[k] = (out[k] || 0) + Number(s.hours || 0)
   })
   Object.keys(out).forEach((k) => {
@@ -2831,25 +3014,36 @@ function payrollDayMetrics(day, employeeId = '') {
     'additional_work_night',
     'additional_holiday_day',
     'additional_holiday_night',
+    'additional_sunday_day',
+    'additional_sunday_night',
   ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const ye = ['ye_work_day', 'ye_work_night', 'ye_holiday_day', 'ye_holiday_night'].reduce(
-    (a, k) => a + Number(buckets[k] || 0),
-    0,
-  )
-  const yp = ['yp_work_day', 'yp_work_night', 'yp_holiday_day', 'yp_holiday_night'].reduce(
-    (a, k) => a + Number(buckets[k] || 0),
-    0,
-  )
+  const ye = [
+    'ye_work_day',
+    'ye_work_night',
+    'ye_holiday_day',
+    'ye_holiday_night',
+    'ye_sunday_day',
+    'ye_sunday_night',
+  ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
+  const yp = [
+    'yp_work_day',
+    'yp_work_night',
+    'yp_holiday_day',
+    'yp_holiday_night',
+    'yp_sunday_day',
+    'yp_sunday_night',
+  ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
   const illegal = [
     'illegal_work_day',
     'illegal_work_night',
     'illegal_holiday_day',
     'illegal_holiday_night',
+    'illegal_sunday_day',
+    'illegal_sunday_night',
   ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const holiday75 = PAYROLL_BUCKET_KEYS.filter((k) => k.includes('_holiday_')).reduce(
-    (a, k) => a + Number(buckets[k] || 0),
-    0,
-  )
+  const holiday75 = PAYROLL_BUCKET_KEYS.filter(
+    (k) => k.includes('_holiday_') || k.includes('_sunday_'),
+  ).reduce((a, k) => a + Number(buckets[k] || 0), 0)
   return {
     ...buckets,
     holiday75: Math.round(holiday75 * 100) / 100,
@@ -2963,10 +3157,9 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
   const monthlySalary = Number(selectedEmp?.monthlySalary || 0)
   const isFullTimeMonthly = isMonthly && weekHoursCfg >= 40
   const isPartTimeMonthly = isMonthly && weekHoursCfg > 0 && weekHoursCfg < 40
-  const baseHourlyRate = isFullTimeMonthly
-    ? monthlySalary / 25
-    : isPartTimeMonthly
-      ? monthlySalary / ((weekHoursCfg * 25) / 6)
+  const baseHourlyRate =
+    isMonthly && weekHoursCfg > 0
+      ? monthlySalary / ((weekHoursCfg * (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) / 6)
       : Number(selectedEmp?.hourlyRate || 0)
 
   entries.forEach(([day], idx) => {
@@ -3024,12 +3217,12 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
     }
   })
 
-  const catHead1 = PAYROLL_CATEGORIES.map((c) => `<th colspan="4">${c.label}</th>`).join('')
+  const catHead1 = PAYROLL_CATEGORIES.map((c) => `<th colspan="6">${c.label}</th>`).join('')
   const catHead2 = PAYROLL_CATEGORIES.map(
-    () => `<th colspan="2">Εργάσιμη</th><th colspan="2">Αργία</th>`,
+    () => `<th colspan="2">Εργάσιμη</th><th colspan="2">Αργία</th><th colspan="2">Κυριακή</th>`,
   ).join('')
   const catHead3 = PAYROLL_CATEGORIES.map(
-    () => `<th>Ημέρα</th><th>Νύχτα</th><th>Ημέρα</th><th>Νύχτα</th>`,
+    () => `<th>Ημέρα</th><th>Νύχτα</th><th>Ημέρα</th><th>Νύχτα</th><th>Ημέρα</th><th>Νύχτα</th>`,
   ).join('')
 
   return `
@@ -3092,13 +3285,10 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const weekHoursCfg = Number(emp.weekWorkingHours || 40)
   const monthlySalary = Number(emp.monthlySalary || 0)
   const isMonthly = emp.payType === 'monthly'
-  const baseHourlyRate = isMonthly
-    ? weekHoursCfg >= 40
-      ? monthlySalary / 25
-      : weekHoursCfg > 0
-        ? monthlySalary / ((weekHoursCfg * 25) / 6)
-        : 0
-    : Number(emp.hourlyRate || 0)
+  const baseHourlyRate =
+    isMonthly && weekHoursCfg > 0
+      ? monthlySalary / ((weekHoursCfg * (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) / 6)
+      : Number(emp.hourlyRate || 0)
 
   const fullRows = expandToFullMonth({}, monthFilter)
   const days = Object.keys(fullRows).sort()
@@ -3126,7 +3316,7 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   let salaryTotal = 0
   if (isMonthly) {
     const absDays = countMonthlyAbsenceDaysInMonth(emp.vat, monthFilter, Number(emp.weekWorkingDays || 5))
-    const deduction = (monthlySalary / 25) * absDays
+    const deduction = (monthlySalary / (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) * absDays
     salaryTotal = Math.max(0, monthlySalary - deduction)
   }
 
@@ -3220,10 +3410,13 @@ function nightHours(start, end) {
   const startM = sh * 60 + sm
   let endM = eh * 60 + em
   if (endM <= startM) endM += 24 * 60
+  const _PR5 = window.PAYROLL_RULES || {}
+  const _nightStartMin5 = _PR5.nightStartMinutes ?? 1320
+  const _nightEndMin5 = _PR5.nightEndMinutes ?? 360
   let nightMin = 0
   for (let m = startM; m < endM; m++) {
     const mod = m % (24 * 60)
-    if (mod < 360 || mod >= 1320) nightMin++
+    if (mod < _nightEndMin5 || mod >= _nightStartMin5) nightMin++
   }
   return Math.round((nightMin / 60) * 100) / 100
 }
@@ -3348,8 +3541,15 @@ function aggregatePayrollClient(state, employeeId = null) {
           nightHours(shift.start || '00:00', shift.end || '00:00') +
           (shift.start2 && shift.end2 ? nightHours(shift.start2, shift.end2) : 0)
         let premiumFactor = 1
-        if (isHolidayOrSunday) premiumFactor += 0.75
-        if (night > 0 && worked > 0) premiumFactor += (night / worked) * 0.25
+        const _PR6 = window.PAYROLL_RULES || {}
+        // Official holiday (even if it falls on a Sunday) → fully paid: base 1 + 75 % = ×1.75.
+        // Plain Sunday within contracted hours → +75 % extra only (base already in salary).
+        if (isOfficialHoliday && _PR6.holidayHoursFullyPaid !== false) {
+          premiumFactor = 1 + (_PR6.withinHolidayAdd ?? 0.75)
+        } else if (isHolidayOrSunday) {
+          premiumFactor += _PR6.withinHolidayAdd ?? 0.75
+        }
+        if (night > 0 && worked > 0) premiumFactor += (night / worked) * (_PR6.withinNightAdd ?? 0.25)
         payable = Math.round(worked * premiumFactor * 100) / 100
       } else {
         if (shift && isAbsenceType(shift.type)) {
@@ -3441,6 +3641,7 @@ function exportSelectedMonthData() {
 
   const out = {
     __meta: { exportedAt: Date.now(), month: monthFilter, mode: 'month-compact' },
+    companyName: snapshot.companyName || '',
     employees: snapshot.employees || [],
     defaultBusinessHours: snapshot.defaultBusinessHours || JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
     defaultEmployeeSettings: snapshot.defaultEmployeeSettings || {
@@ -3662,6 +3863,8 @@ function mergeImportedState(baseState, incomingState) {
 
   return {
     ...base,
+    companyName: incoming.companyName || base.companyName || '',
+    customHolidayNames: { ...(base.customHolidayNames || {}), ...(incoming.customHolidayNames || {}) },
     employees: [...byVat.values()].sort((a, b) => String(a.vat).localeCompare(String(b.vat))),
     defaultBusinessHours: incoming.defaultBusinessHours || base.defaultBusinessHours,
     defaultEmployeeSettings: incoming.defaultEmployeeSettings || base.defaultEmployeeSettings,

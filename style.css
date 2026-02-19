@@ -19,8 +19,45 @@ body {
 h1 {
   color: white;
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.company-name {
+  color: rgba(255,255,255,0.88);
+  text-align: center;
+  font-size: 1.05em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin: 0 0 16px;
+  cursor: pointer;
+}
+.company-name:hover {
+  color: #fff;
+  text-decoration: underline dotted rgba(255,255,255,0.5);
+}
+.company-name-placeholder {
+  opacity: 0.45;
+  font-weight: 400;
+  font-style: italic;
+}
+.company-name-input {
+  display: block;
+  margin: 0 auto 16px;
+  text-align: center;
+  font-size: 1.05em;
+  font-weight: 600;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  color: #fff;
+  padding: 4px 12px;
+  width: 280px;
+  max-width: 90%;
+  outline: none;
+}
+.company-name-input::placeholder {
+  color: rgba(255,255,255,0.5);
 }
 
 .controls {
@@ -456,6 +493,18 @@ h1 {
 
 .schedule-table th.holiday-header:hover {
   background: linear-gradient(135deg, #fb8c00, #ef6c00);
+}
+
+.holiday-name {
+  font-size: 0.62em;
+  font-weight: 600;
+  color: #fff;
+  opacity: 0.92;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .premium-badge {
