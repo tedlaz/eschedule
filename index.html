@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Programma</title>
+  <title>eSchedule</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -37,7 +37,8 @@
         <button class="btn-secondary" onclick="changeWeek(-1)">◀</button>
         <span id="weekDisplay"></span>
         <button class="btn-secondary" onclick="changeWeek(1)">▶</button>
-        <button class="btn-secondary" onclick="copyPreviousWeekToCurrentWeek()" title="Αντιγραφή προηγούμενης εβδομάδας">⎘ Προηγ.→Τρέχ.</button>
+        <button class="btn-secondary" onclick="copyPreviousWeekToCurrentWeek()"
+          title="Αντιγραφή προηγούμενης εβδομάδας">⎘ Προηγ.→Τρέχ.</button>
       </div>
     </div>
 
@@ -146,7 +147,8 @@
           </div>
         </div>
         <div class="form-group">
-          <label><input type="checkbox" id="hasSecondShift" onchange="toggleSecondShiftFields()"> Δεύτερη βάρδια ίδια μέρα</label>
+          <label><input type="checkbox" id="hasSecondShift" onchange="toggleSecondShiftFields()"> Δεύτερη βάρδια ίδια
+            μέρα</label>
         </div>
         <div class="form-row" id="secondShiftFields" style="display:none;">
           <div class="form-group">
@@ -158,11 +160,13 @@
           </div>
           <div class="form-group">
             <label>Start Time 2</label>
-            <input type="text" id="shiftStart2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
+            <input type="text" id="shiftStart2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
           </div>
           <div class="form-group">
             <label>End Time 2</label>
-            <input type="text" id="shiftEnd2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
+            <input type="text" id="shiftEnd2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
           </div>
         </div>
       </div>
@@ -257,7 +261,8 @@
   <div class="modal" id="cardDiffModal">
     <div class="modal-content wide">
       <h2>🪪 Διαφορές κάρτας vs προγράμματος</h2>
-      <p style="color:#666; margin-bottom:10px; font-size:0.9em;">Φόρτωσε CSV/TXT από σύστημα κάρτας με στήλες: employee/date/in/out (ή αντίστοιχες ελληνικές).</p>
+      <p style="color:#666; margin-bottom:10px; font-size:0.9em;">Φόρτωσε CSV/TXT από σύστημα κάρτας με στήλες:
+        employee/date/in/out (ή αντίστοιχες ελληνικές).</p>
       <div class="form-row">
         <div class="form-group">
           <label>Αρχείο κάρτας</label>
