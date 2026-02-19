@@ -4,15 +4,16 @@ const DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 
 // const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_ABBREV = ['Δε', 'Τρ', 'Τε', 'Πε', 'Πα', 'Σα', 'Κυ']
 
-// Default business hours (template for new weeks)
-const DEFAULT_BUSINESS_HOURS = {
+// Default business hours — loaded from config.js (window.DEFAULT_BUSINESS_HOURS)
+// Falls back to the values below when config.js is absent.
+const DEFAULT_BUSINESS_HOURS = window.DEFAULT_BUSINESS_HOURS || {
   0: { open: '09:00', close: '17:00', closed: false }, // Monday
   1: { open: '09:00', close: '17:00', closed: false },
   2: { open: '09:00', close: '17:00', closed: false },
   3: { open: '09:00', close: '17:00', closed: false },
   4: { open: '09:00', close: '17:00', closed: false },
-  5: { open: '09:00', close: '20:00', closed: false }, // Saturday
-  6: { open: '09:00', close: '17:00', closed: false }, // Sunday
+  5: { open: '00:00', close: '00:00', closed: false }, // Saturday
+  6: { open: '00:00', close: '00:00', closed: false }, // Sunday
 }
 
 let data = {
@@ -37,7 +38,6 @@ let data = {
 
 let currentWeekStart = getMonday(new Date())
 let selectedTimelineDay = 0 // 0 = Monday
-
 
 // Multi-cell selection state
 let selectedCells = [] // Array of {employeeId, dateStr} objects
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const payload = JSON.stringify(sanitizeStateForPersist(data))
       localStorage.setItem(STORAGE_KEY, payload)
-      } catch {}
+    } catch {}
   })
   setInterval(() => {
     saveData()
@@ -338,7 +338,8 @@ function renderSchedule() {
     const weekSettings = getEmployeeWeekSettings(emp.vat)
     const weekHours = calculateWeekHours(emp.vat, currentWeekStart)
     const weekCost = calculateWeekCost(emp.vat, currentWeekStart)
-    const targetHours = emp.payType === 'monthly' ? Number(emp.weekWorkingHours || 40) : Number(weekSettings.workingHours || 40)
+    const targetHours =
+      emp.payType === 'monthly' ? Number(emp.weekWorkingHours || 40) : Number(weekSettings.workingHours || 40)
     const hoursPercent = Math.min((weekHours / (targetHours || 1)) * 100, 100)
     let hoursClass = ''
     if (weekHours < targetHours) hoursClass = 'danger'
@@ -376,7 +377,9 @@ function renderSchedule() {
       else if (isRestDay && !shift) cellClass += ' rest-day'
       if (isHolidayOrSun && !isClosed) cellClass += ' holiday-day'
 
-      const isSelected = selectedCells.some((c) => String(c.employeeId) === String(emp.vat) && c.dateStr === dateStr)
+      const isSelected = selectedCells.some(
+        (c) => String(c.employeeId) === String(emp.vat) && c.dateStr === dateStr,
+      )
       if (isSelected) cellClass += ' selected-cell'
 
       html += `<td class="${cellClass}" data-employee-id="${emp.vat}" data-date="${dateStr}" data-closed="${isClosed}" onclick="handleCellClick(event, '${String(emp.vat)}', '${dateStr}', ${isClosed})">`
@@ -389,17 +392,21 @@ function renderSchedule() {
             premiumIndicators += '<span class="shift-premium sun">+75%</span>'
           if (premiums && premiums.nightHours > 0)
             premiumIndicators += '<span class="shift-premium night">🌙' + premiums.nightHours + 'h</span>'
-          const modeTag = String(shift.type)==='ΤΗΛ' ? '<span class="telework-badge">ΤΗΛ</span>' : ''
-          const second = shift.start2 && shift.end2
-            ? ` / ${shift.start2}-${shift.end2}${shift.type2 === 'ΤΗΛ' ? '(ΤΗΛ)' : ''}`
-            : ''
+          const modeTag = String(shift.type) === 'ΤΗΛ' ? '<span class="telework-badge">ΤΗΛ</span>' : ''
+          const second =
+            shift.start2 && shift.end2
+              ? ` / ${shift.start2}-${shift.end2}${shift.type2 === 'ΤΗΛ' ? '(ΤΗΛ)' : ''}`
+              : ''
           const timeText = `${shift.start} - ${shift.end}${second}`
           const totalShiftHours = shiftTotalHours(shift)
           const overworkBadge = totalShiftHours > 8 ? '<span class="overtime-badge">ΥΕ</span>' : ''
           const overtimeBadge = totalShiftHours > 9 ? '<span class="yperoria-badge">ΥΠ</span>' : ''
-          const badgesRow = (modeTag || overworkBadge || overtimeBadge) ? `<div class="shift-badges">${modeTag}${overworkBadge}${overtimeBadge}</div>` : ''
+          const badgesRow =
+            modeTag || overworkBadge || overtimeBadge
+              ? `<div class="shift-badges">${modeTag}${overworkBadge}${overtimeBadge}</div>`
+              : ''
           html += `<div class="shift-block${isHolidayOrSun ? ' shift-holiday' : ''}"><span class="shift-time">${timeText}</span>${badgesRow}${premiumIndicators ? '<div class="premium-indicators">' + premiumIndicators + '</div>' : ''}</div>`
-        } else if (String(shift.type)==='AN') {
+        } else if (String(shift.type) === 'AN') {
           html += `<div class="shift-block absence-other">ΡΕΠΟ</div>`
         } else {
           if (isNonWorkingType(shift)) {
@@ -1060,7 +1067,7 @@ function calculateWeekCost(employeeId, weekStart) {
     const monthlySalary = Number(emp.monthlySalary || 0)
     const weeklyBase = Math.round(((monthlySalary * 12) / 52) * 100) / 100
     const absDays = countMonthlyAbsenceDaysInWeek(employeeId, weekStart, Number(emp.weekWorkingDays || 5))
-    const weeklyDeduction = Math.round(((monthlySalary / 25) * absDays) * 100) / 100
+    const weeklyDeduction = Math.round((monthlySalary / 25) * absDays * 100) / 100
     const weeklyCost = Math.max(0, Math.round((weeklyBase - weeklyDeduction) * 100) / 100)
     return {
       totalHours,
@@ -1272,7 +1279,9 @@ function saveEmployee() {
     alert('Το ΑΦΜ πρέπει να έχει ακριβώς 9 ψηφία')
     return
   }
-  const duplicateVat = data.employees.find((e) => String(e.vat || '') === vat && String(e.vat) !== String(editId || ''))
+  const duplicateVat = data.employees.find(
+    (e) => String(e.vat || '') === vat && String(e.vat) !== String(editId || ''),
+  )
   if (duplicateVat) {
     alert('Υπάρχει ήδη εργαζόμενος με αυτό το ΑΦΜ')
     return
@@ -1297,7 +1306,7 @@ function saveEmployee() {
       const migratePrefixed = (obj) => {
         Object.keys(obj || {}).forEach((k) => {
           if (k.startsWith(`${oldId}_`)) {
-            const nk = `${newId}_${k.slice(oldId.length+1)}`
+            const nk = `${newId}_${k.slice(oldId.length + 1)}`
             obj[nk] = obj[k]
             delete obj[k]
           }
@@ -1388,7 +1397,7 @@ function openShiftModal(employeeId, dateStr, isClosed) {
       document.getElementById('shiftEnd').value = shift.end
       const has2 = !!(shift.start2 && shift.end2)
       document.getElementById('hasSecondShift').checked = has2
-      document.getElementById('shiftType2').value = (shift.type2 === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ')
+      document.getElementById('shiftType2').value = shift.type2 === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
       document.getElementById('shiftStart2').value = shift.start2 || ''
       document.getElementById('shiftEnd2').value = shift.end2 || ''
       toggleSecondShiftFields()
@@ -1485,7 +1494,11 @@ function validate11hRestBetweenDays(employeeId, dateStr, candidateShift) {
     if (p.length) {
       const prevLast = p[p.length - 1].end
       const rest = curFirst + 24 * 60 - prevLast
-      if (rest < 11 * 60) return { ok: false, msg: 'Ανάμεσα σε βάρδιες διαφορετικών ημερών απαιτούνται τουλάχιστον 11 ώρες ανάπαυση (προηγούμενη μέρα).' }
+      if (rest < 11 * 60)
+        return {
+          ok: false,
+          msg: 'Ανάμεσα σε βάρδιες διαφορετικών ημερών απαιτούνται τουλάχιστον 11 ώρες ανάπαυση (προηγούμενη μέρα).',
+        }
     }
   }
 
@@ -1496,7 +1509,11 @@ function validate11hRestBetweenDays(employeeId, dateStr, candidateShift) {
     if (n.length) {
       const nextFirst = n[0].start
       const rest = nextFirst + 24 * 60 - curLast
-      if (rest < 11 * 60) return { ok: false, msg: 'Ανάμεσα σε βάρδιες διαφορετικών ημερών απαιτούνται τουλάχιστον 11 ώρες ανάπαυση (επόμενη μέρα).' }
+      if (rest < 11 * 60)
+        return {
+          ok: false,
+          msg: 'Ανάμεσα σε βάρδιες διαφορετικών ημερών απαιτούνται τουλάχιστον 11 ώρες ανάπαυση (επόμενη μέρα).',
+        }
     }
   }
 
@@ -1509,7 +1526,7 @@ function validate24hRestInAny7Days(employeeId, pivotDateStr, candidateShift = nu
     for (let d = 0; d < 7; d++) {
       const dayStr = plusDaysISO(windowStartStr, d)
       const key = `${employeeId}_${dayStr}`
-      const sh = (dayStr === pivotDateStr && candidateShift !== null) ? candidateShift : data.shifts[key]
+      const sh = dayStr === pivotDateStr && candidateShift !== null ? candidateShift : data.shifts[key]
       if (!isWorkingType(sh)) continue
       const dayOffset = d * 24 * 60
       const add = (s, e) => {
@@ -1543,7 +1560,10 @@ function validate24hRestInAny7Days(employeeId, pivotDateStr, candidateShift = nu
     maxRest = Math.max(maxRest, 7 * 24 * 60 - prevEnd)
 
     if (maxRest < 24 * 60) {
-      return { ok: false, msg: 'Σε κάθε 7ήμερο πρέπει να υπάρχει τουλάχιστον 24 συνεχόμενες ώρες ξεκούρασης.' }
+      return {
+        ok: false,
+        msg: 'Σε κάθε 7ήμερο πρέπει να υπάρχει τουλάχιστον 24 συνεχόμενες ώρες ξεκούρασης.',
+      }
     }
   }
 
@@ -1592,7 +1612,7 @@ function saveShift() {
     const start = document.getElementById('shiftStart').value
     const end = document.getElementById('shiftEnd').value
     const has2 = !!document.getElementById('hasSecondShift')?.checked
-    const type2 = (document.getElementById('shiftType2')?.value === 'ΤΗΛ') ? 'ΤΗΛ' : 'ΕΡΓ'
+    const type2 = document.getElementById('shiftType2')?.value === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
     const start2 = document.getElementById('shiftStart2').value
     const end2 = document.getElementById('shiftEnd2').value
 
@@ -1631,7 +1651,11 @@ function saveShift() {
     }
 
     const rec = { type: shiftType, start, end }
-    if (has2) { rec.start2 = start2; rec.end2 = end2; rec.type2 = type2 }
+    if (has2) {
+      rec.start2 = start2
+      rec.end2 = end2
+      rec.type2 = type2
+    }
     const restChk = validate11hRestBetweenDays(employeeId, dateStr, rec)
     if (!restChk.ok) {
       alert(restChk.msg)
@@ -1662,7 +1686,7 @@ function saveMultipleShifts(shiftType) {
     const start = document.getElementById('shiftStart').value
     const end = document.getElementById('shiftEnd').value
     const has2 = !!document.getElementById('hasSecondShift')?.checked
-    const type2 = (document.getElementById('shiftType2')?.value === 'ΤΗΛ') ? 'ΤΗΛ' : 'ΕΡΓ'
+    const type2 = document.getElementById('shiftType2')?.value === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
     const start2 = document.getElementById('shiftStart2').value
     const end2 = document.getElementById('shiftEnd2').value
 
@@ -1710,7 +1734,11 @@ function saveMultipleShifts(shiftType) {
 
       const key = `${cell.employeeId}_${cell.dateStr}`
       const rec = { type: shiftType, start, end }
-      if (has2) { rec.start2 = start2; rec.end2 = end2; rec.type2 = type2 }
+      if (has2) {
+        rec.start2 = start2
+        rec.end2 = end2
+        rec.type2 = type2
+      }
       const restChk = validate11hRestBetweenDays(cell.employeeId, cell.dateStr, rec)
       if (!restChk.ok) {
         alert(`${cell.employeeId} ${cell.dateStr}: ${restChk.msg}`)
@@ -1883,7 +1911,8 @@ function openEmployeePresetsModal() {
   const container = document.getElementById('employeePresetsForm')
 
   if (!data.employees.length) {
-    container.innerHTML = '<p style="color:#999; text-align:center; padding:16px;">No employees available.</p>'
+    container.innerHTML =
+      '<p style="color:#999; text-align:center; padding:16px;">No employees available.</p>'
     modal.classList.add('active')
     return
   }
@@ -1961,7 +1990,7 @@ function saveDefaults() {
     const close = document.getElementById(`defBhClose${i}`).value
     const closed = false
 
-    if ((!isValidTime24h(open) || !isValidTime24h(close))) {
+    if (!isValidTime24h(open) || !isValidTime24h(close)) {
       hasError = true
     }
 
@@ -1987,7 +2016,8 @@ function openEmployeeWeekModal(employeeId) {
   const weekEnd = new Date(currentWeekStart)
   weekEnd.setDate(weekEnd.getDate() + 6)
 
-  document.getElementById('employeeWeekModalTitle').textContent = `${employeeLabel(emp)} - Ρυθμίσεις Εβδομάδας`
+  document.getElementById('employeeWeekModalTitle').textContent =
+    `${employeeLabel(emp)} - Ρυθμίσεις Εβδομάδας`
   document.getElementById('employeeWeekSubtitle').textContent =
     `Ρυθμίσεις για ${formatDisplayDate(currentWeekStart)} - ${formatDisplayDate(weekEnd)}`
   document.getElementById('employeeWeekId').value = employeeId
@@ -2184,7 +2214,9 @@ async function idbGetState() {
 }
 
 async function clearPersistedState() {
-  try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {}
   try {
     const db = await idbOpen()
     await new Promise((resolve, reject) => {
@@ -2209,7 +2241,13 @@ function shiftTypePriority(shift) {
   if (isWorkingType(shift)) return 4
   if (shift && isAbsenceType(shift.type) && isPaidAbsenceType(shift.type)) return 3
   if (shift && isAbsenceType(shift.type)) return 2
-  if (shift && (String(shift.type).trim() === 'AN' || String(shift.type).trim() === 'ΜΕ' || String(shift.type).trim() === 'ME')) return 1
+  if (
+    shift &&
+    (String(shift.type).trim() === 'AN' ||
+      String(shift.type).trim() === 'ΜΕ' ||
+      String(shift.type).trim() === 'ME')
+  )
+    return 1
   return 0
 }
 
@@ -2259,7 +2297,14 @@ function sanitizeStateForPersist(state) {
     const nvat = mk ? mk[1] : vat
     const nday = mk ? mk[2] : day
     const nweek = nday ? getWeekKeyFromDateStr(nday) : week
-    normalizedShiftEntries.push({ key: nk, value: clean, vat: nvat, day: nday, week: nweek, isWorking: ['ΕΡΓ', 'ΤΗΛ'].includes(clean.type) })
+    normalizedShiftEntries.push({
+      key: nk,
+      value: clean,
+      vat: nvat,
+      day: nday,
+      week: nweek,
+      isWorking: ['ΕΡΓ', 'ΤΗΛ'].includes(clean.type),
+    })
   })
 
   // Keep only weeks that have at least one working schedule, to keep JSON small
@@ -2281,9 +2326,11 @@ function sanitizeStateForPersist(state) {
 
   const sortObjectByDateKey = (obj) => {
     const outObj = {}
-    Object.keys(obj || {}).sort((a, b) => String(a).localeCompare(String(b))).forEach((k) => {
-      outObj[k] = obj[k]
-    })
+    Object.keys(obj || {})
+      .sort((a, b) => String(a).localeCompare(String(b)))
+      .forEach((k) => {
+        outObj[k] = obj[k]
+      })
     return outObj
   }
 
@@ -2314,7 +2361,9 @@ async function saveData() {
     data = sanitizeStateForPersist(data)
     const payload = JSON.stringify(data)
     localStorage.setItem(STORAGE_KEY, payload)
-    try { await idbSetState(payload) } catch {}
+    try {
+      await idbSetState(payload)
+    } catch {}
   } catch (err) {
     console.error('Failed to save state to localStorage', err)
   }
@@ -2342,26 +2391,30 @@ function normalizeLoadedState(loaded) {
           cand.end2 = String(v.end2)
           cand.type2 = String(v?.type2 || t) === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
         }
-        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk])) normalizedShifts[nk] = cand
+        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk]))
+          normalizedShifts[nk] = cand
         return
       }
 
       if (t === 'AN') {
         const cand = { type: 'AN' }
-        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk])) normalizedShifts[nk] = cand
+        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk]))
+          normalizedShifts[nk] = cand
         return
       }
 
       if (String(t) === 'ΜΕ' || String(t) === 'ME') {
         const cand = { type: 'ΜΕ' }
-        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk])) normalizedShifts[nk] = cand
+        if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk]))
+          normalizedShifts[nk] = cand
         return
       }
 
       // Keep any configured/custom absence types (do not drop unknown types)
       const r = String(v?.reason || '').trim()
       const cand = r ? { type: t, reason: r } : { type: t }
-      if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk])) normalizedShifts[nk] = cand
+      if (!normalizedShifts[nk] || shiftTypePriority(cand) >= shiftTypePriority(normalizedShifts[nk]))
+        normalizedShifts[nk] = cand
     })
     loaded.shifts = normalizedShifts
   }
@@ -2381,7 +2434,14 @@ function normalizeLoadedState(loaded) {
   const payrollRules = loaded.payrollRules || {}
   return {
     employees: loaded.employees || [],
-    defaultBusinessHours: loaded.defaultBusinessHours ? Object.fromEntries(Object.entries(loaded.defaultBusinessHours).map(([k,d]) => [k, { open: String(d?.open||'09:00'), close: String(d?.close||'17:00'), closed: false }])) : JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
+    defaultBusinessHours: loaded.defaultBusinessHours
+      ? Object.fromEntries(
+          Object.entries(loaded.defaultBusinessHours).map(([k, d]) => [
+            k,
+            { open: String(d?.open || '09:00'), close: String(d?.close || '17:00'), closed: false },
+          ]),
+        )
+      : JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
     defaultEmployeeSettings: loaded.defaultEmployeeSettings
       ? {
           ...loaded.defaultEmployeeSettings,
@@ -2410,7 +2470,17 @@ function normalizeLoadedState(loaded) {
       officialHolidayPaidIfAbsent: payrollRules.officialHolidayPaidIfAbsent ?? true,
       officialHolidayPayMultiplier: Number(payrollRules.officialHolidayPayMultiplier ?? 1),
     },
-    weekBusinessHours: Object.fromEntries(Object.entries(loaded.weekBusinessHours || {}).map(([wk,v]) => [wk, Object.fromEntries(Object.entries(v||{}).map(([k,d]) => [k, { open: String(d?.open||'09:00'), close: String(d?.close||'17:00'), closed: false }]))])),
+    weekBusinessHours: Object.fromEntries(
+      Object.entries(loaded.weekBusinessHours || {}).map(([wk, v]) => [
+        wk,
+        Object.fromEntries(
+          Object.entries(v || {}).map(([k, d]) => [
+            k,
+            { open: String(d?.open || '09:00'), close: String(d?.close || '17:00'), closed: false },
+          ]),
+        ),
+      ]),
+    ),
     weekRestDays: loaded.weekRestDays || {},
     weekEmployeeSettings: loaded.weekEmployeeSettings || {},
     weekHolidays: loaded.weekHolidays || {},
@@ -2421,7 +2491,11 @@ function normalizeLoadedState(loaded) {
 function pickBestSnapshot(candidates) {
   const parsed = candidates
     .map((raw) => {
-      try { return raw ? JSON.parse(raw) : null } catch { return null }
+      try {
+        return raw ? JSON.parse(raw) : null
+      } catch {
+        return null
+      }
     })
     .filter(Boolean)
   if (!parsed.length) return {}
@@ -2442,7 +2516,9 @@ async function loadData() {
     const localPrimary = localStorage.getItem(STORAGE_KEY)
     const localBackup = null
     let idbRaw = null
-    try { idbRaw = await idbGetState() } catch {}
+    try {
+      idbRaw = await idbGetState()
+    } catch {}
 
     const loaded = pickBestSnapshot([localPrimary, idbRaw])
     data = normalizeLoadedState(loaded)
@@ -2450,7 +2526,9 @@ async function loadData() {
     // self-heal all backends with chosen snapshot
     const payload = JSON.stringify(sanitizeStateForPersist(data))
     localStorage.setItem(STORAGE_KEY, payload)
-    try { await idbSetState(payload) } catch {}
+    try {
+      await idbSetState(payload)
+    } catch {}
   } catch (err) {
     console.error('Failed to load state from storage', err)
     data = normalizeLoadedState({})
@@ -2552,7 +2630,6 @@ function dayTimeText(day, employeeId = '') {
   return ranges.join(', ')
 }
 
-
 function isHolidayOrSundayDate(dayStr) {
   const d = parseISODateLocal(dayStr)
   if (isNaN(d.getTime())) return false
@@ -2572,7 +2649,7 @@ function shiftRangeToSlices(dayStr, start, end, originType = 'ΕΡΓ') {
   for (let m = startMin; m < endMin; m += 15) {
     const dur = Math.min(15, endMin - m)
     const dayOffset = Math.floor(m / (24 * 60))
-    const minuteInDay = ((m % (24 * 60)) + (24 * 60)) % (24 * 60)
+    const minuteInDay = ((m % (24 * 60)) + 24 * 60) % (24 * 60)
     const actualDay = plusDaysISO(dayStr, dayOffset)
     out.push({
       day: actualDay,
@@ -2601,7 +2678,9 @@ function classifyWeekSlices(employeeId, weekKey) {
 
   const slices = []
   for (let i = 0; i < 7; i++) {
-    const day = formatISODateLocal(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i))
+    const day = formatISODateLocal(
+      new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i),
+    )
     const sh = data.shifts?.[`${employeeId}_${day}`]
     if (!isWorkingType(sh)) continue
     slices.push(...shiftRangeToSlices(day, sh.start, sh.end, sh.type))
@@ -2617,11 +2696,16 @@ function classifyWeekSlices(employeeId, weekKey) {
     const dayWorked = byShiftDayWorked[thresholdDay] || 0
     let category = 'within'
 
-    if (dayWorked >= 11) category = 'illegal' // 12η+
-    else if (dayWorked >= 9) category = 'yp' // 10η-11η
-    else if (dayWorked >= 8) category = 'ye' // 9η
-    else if (Number(weekTarget || 40) < 40 && weekWorked >= Number(weekTarget || 40) && weekWorked < 40) category = 'additional'
-    else if (weekWorked >= 40 && weekWorked < 45) category = 'ye' // εβδομαδιαία 40->45
+    if (dayWorked >= 11)
+      category = 'illegal' // 12η+
+    else if (dayWorked >= 9)
+      category = 'yp' // 10η-11η
+    else if (dayWorked >= 8)
+      category = 'ye' // 9η
+    else if (Number(weekTarget || 40) < 40 && weekWorked >= Number(weekTarget || 40) && weekWorked < 40)
+      category = 'additional'
+    else if (weekWorked >= 40 && weekWorked < 45)
+      category = 'ye' // εβδομαδιαία 40->45
     else if (weekWorked >= 45) category = 'yp'
 
     byShiftDayWorked[thresholdDay] = dayWorked + sl.hours
@@ -2644,7 +2728,9 @@ function getEmployeeDayPayrollMetrics(employeeId, day) {
     else if (s.category === 'additional') out.additional += s.hours
     else if (s.category === 'illegal') out.illegal += s.hours
   })
-  Object.keys(out).forEach((k) => { out[k] = Math.round(out[k] * 100) / 100 })
+  Object.keys(out).forEach((k) => {
+    out[k] = Math.round(out[k] * 100) / 100
+  })
   return out
 }
 
@@ -2665,14 +2751,15 @@ const PAYROLL_BUCKET_KEYS = PAYROLL_CATEGORIES.flatMap((c) => [
 
 function emptyPayrollBuckets() {
   const out = {}
-  PAYROLL_BUCKET_KEYS.forEach((k) => { out[k] = 0 })
+  PAYROLL_BUCKET_KEYS.forEach((k) => {
+    out[k] = 0
+  })
   return out
 }
 
 function payrollBucketKey(category, isHoliday, isNight) {
   return `${category}_${isHoliday ? 'holiday' : 'work'}_${isNight ? 'night' : 'day'}`
 }
-
 
 function bucketPayMultiplier(bucketKey) {
   const isNight = String(bucketKey).endsWith('_night')
@@ -2711,7 +2798,9 @@ function getEmployeeDayBucketMetrics(employeeId, day) {
     const k = payrollBucketKey(cat, !!s.isHoliday, !!s.isNight)
     out[k] = (out[k] || 0) + Number(s.hours || 0)
   })
-  Object.keys(out).forEach((k) => { out[k] = Math.round(out[k] * 100) / 100 })
+  Object.keys(out).forEach((k) => {
+    out[k] = Math.round(out[k] * 100) / 100
+  })
   return out
 }
 
@@ -2722,7 +2811,9 @@ function sumBucketMetrics(list) {
       out[k] += Number(obj?.[k] || 0)
     })
   })
-  PAYROLL_BUCKET_KEYS.forEach((k) => { out[k] = Math.round(out[k] * 100) / 100 })
+  PAYROLL_BUCKET_KEYS.forEach((k) => {
+    out[k] = Math.round(out[k] * 100) / 100
+  })
   return out
 }
 
@@ -2731,12 +2822,34 @@ function payrollDayMetrics(day, employeeId = '') {
   const perEmp = empIds.map((eid) => getEmployeeDayBucketMetrics(eid, day))
   const buckets = sumBucketMetrics(perEmp)
   const total = PAYROLL_BUCKET_KEYS.reduce((acc, k) => acc + Number(buckets[k] || 0), 0)
-  const night = PAYROLL_BUCKET_KEYS.filter((k) => k.endsWith('_night')).reduce((acc, k) => acc + Number(buckets[k] || 0), 0)
-  const additional = ['additional_work_day', 'additional_work_night', 'additional_holiday_day', 'additional_holiday_night'].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const ye = ['ye_work_day', 'ye_work_night', 'ye_holiday_day', 'ye_holiday_night'].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const yp = ['yp_work_day', 'yp_work_night', 'yp_holiday_day', 'yp_holiday_night'].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const illegal = ['illegal_work_day', 'illegal_work_night', 'illegal_holiday_day', 'illegal_holiday_night'].reduce((a, k) => a + Number(buckets[k] || 0), 0)
-  const holiday75 = PAYROLL_BUCKET_KEYS.filter((k) => k.includes('_holiday_')).reduce((a, k) => a + Number(buckets[k] || 0), 0)
+  const night = PAYROLL_BUCKET_KEYS.filter((k) => k.endsWith('_night')).reduce(
+    (acc, k) => acc + Number(buckets[k] || 0),
+    0,
+  )
+  const additional = [
+    'additional_work_day',
+    'additional_work_night',
+    'additional_holiday_day',
+    'additional_holiday_night',
+  ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
+  const ye = ['ye_work_day', 'ye_work_night', 'ye_holiday_day', 'ye_holiday_night'].reduce(
+    (a, k) => a + Number(buckets[k] || 0),
+    0,
+  )
+  const yp = ['yp_work_day', 'yp_work_night', 'yp_holiday_day', 'yp_holiday_night'].reduce(
+    (a, k) => a + Number(buckets[k] || 0),
+    0,
+  )
+  const illegal = [
+    'illegal_work_day',
+    'illegal_work_night',
+    'illegal_holiday_day',
+    'illegal_holiday_night',
+  ].reduce((a, k) => a + Number(buckets[k] || 0), 0)
+  const holiday75 = PAYROLL_BUCKET_KEYS.filter((k) => k.includes('_holiday_')).reduce(
+    (a, k) => a + Number(buckets[k] || 0),
+    0,
+  )
   return {
     ...buckets,
     holiday75: Math.round(holiday75 * 100) / 100,
@@ -2830,10 +2943,11 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
   }
 
   const amountSubtotalRow = (labelHtml, totals, hourlyRate) => {
-    const cells = PAYROLL_BUCKET_KEYS.map((k) => `<td><strong>${fmtAmount(bucketAmount(totals[k], k, hourlyRate))}</strong></td>`).join('')
+    const cells = PAYROLL_BUCKET_KEYS.map(
+      (k) => `<td><strong>${fmtAmount(bucketAmount(totals[k], k, hourlyRate))}</strong></td>`,
+    ).join('')
     return `<tr class="week-separator"><td colspan="3">${labelHtml}</td>${cells}</tr>`
   }
-
 
   let body = ''
   let amountBody = ''
@@ -2850,9 +2964,9 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
   const isFullTimeMonthly = isMonthly && weekHoursCfg >= 40
   const isPartTimeMonthly = isMonthly && weekHoursCfg > 0 && weekHoursCfg < 40
   const baseHourlyRate = isFullTimeMonthly
-    ? (monthlySalary / 25)
+    ? monthlySalary / 25
     : isPartTimeMonthly
-      ? (monthlySalary / ((weekHoursCfg * 25) / 6))
+      ? monthlySalary / ((weekHoursCfg * 25) / 6)
       : Number(selectedEmp?.hourlyRate || 0)
 
   entries.forEach(([day], idx) => {
@@ -2863,8 +2977,15 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
       const prevWeekStart = parseISODateLocal(currentWeek)
       const prevWeekEnd = new Date(prevWeekStart)
       prevWeekEnd.setDate(prevWeekEnd.getDate() + 6)
-      body += subtotalRow(`<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`, weekAgg)
-      amountBody += amountSubtotalRow(`<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`, weekAmountAgg, baseHourlyRate)
+      body += subtotalRow(
+        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`,
+        weekAgg,
+      )
+      amountBody += amountSubtotalRow(
+        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`,
+        weekAmountAgg,
+        baseHourlyRate,
+      )
       weekAgg = emptyPayrollBuckets()
       weekAmountAgg = emptyPayrollBuckets()
     }
@@ -2882,21 +3003,34 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
     const timeText = dayTimeText(day, employeeId)
     const bucketCells = PAYROLL_BUCKET_KEYS.map((k) => `<td>${fmtHours(m[k])}</td>`).join('')
     body += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${bucketCells}</tr>`
-    const amountCells = PAYROLL_BUCKET_KEYS.map((k) => `<td>${fmtAmount(bucketAmount(m[k], k, baseHourlyRate))}</td>`).join('')
+    const amountCells = PAYROLL_BUCKET_KEYS.map(
+      (k) => `<td>${fmtAmount(bucketAmount(m[k], k, baseHourlyRate))}</td>`,
+    ).join('')
     amountBody += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${amountCells}</tr>`
 
     if (idx === entries.length - 1) {
       const lastWeekStart = parseISODateLocal(currentWeek)
       const lastWeekEnd = new Date(lastWeekStart)
       lastWeekEnd.setDate(lastWeekEnd.getDate() + 6)
-      body += subtotalRow(`<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`, weekAgg)
-      amountBody += amountSubtotalRow(`<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`, weekAmountAgg, baseHourlyRate)
+      body += subtotalRow(
+        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`,
+        weekAgg,
+      )
+      amountBody += amountSubtotalRow(
+        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`,
+        weekAmountAgg,
+        baseHourlyRate,
+      )
     }
   })
 
   const catHead1 = PAYROLL_CATEGORIES.map((c) => `<th colspan="4">${c.label}</th>`).join('')
-  const catHead2 = PAYROLL_CATEGORIES.map(() => `<th colspan="2">Εργάσιμη</th><th colspan="2">Αργία</th>`).join('')
-  const catHead3 = PAYROLL_CATEGORIES.map(() => `<th>Ημέρα</th><th>Νύχτα</th><th>Ημέρα</th><th>Νύχτα</th>`).join('')
+  const catHead2 = PAYROLL_CATEGORIES.map(
+    () => `<th colspan="2">Εργάσιμη</th><th colspan="2">Αργία</th>`,
+  ).join('')
+  const catHead3 = PAYROLL_CATEGORIES.map(
+    () => `<th>Ημέρα</th><th>Νύχτα</th><th>Ημέρα</th><th>Νύχτα</th>`,
+  ).join('')
 
   return `
     <div class="payroll-tabs">
@@ -2951,7 +3085,6 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
   `
 }
 
-
 function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const emp = (data.employees || []).find((e) => String(e.vat) === String(employeeId || ''))
   if (!emp || !monthFilter) return null
@@ -2960,9 +3093,11 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const monthlySalary = Number(emp.monthlySalary || 0)
   const isMonthly = emp.payType === 'monthly'
   const baseHourlyRate = isMonthly
-    ? (weekHoursCfg >= 40
-      ? (monthlySalary / 25)
-      : (weekHoursCfg > 0 ? (monthlySalary / ((weekHoursCfg * 25) / 6)) : 0))
+    ? weekHoursCfg >= 40
+      ? monthlySalary / 25
+      : weekHoursCfg > 0
+        ? monthlySalary / ((weekHoursCfg * 25) / 6)
+        : 0
     : Number(emp.hourlyRate || 0)
 
   const fullRows = expandToFullMonth({}, monthFilter)
@@ -2970,7 +3105,9 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const monthBuckets = emptyPayrollBuckets()
   days.forEach((day) => {
     const m = payrollDayMetrics(day, String(employeeId))
-    PAYROLL_BUCKET_KEYS.forEach((k) => { monthBuckets[k] += Number(m[k] || 0) })
+    PAYROLL_BUCKET_KEYS.forEach((k) => {
+      monthBuckets[k] += Number(m[k] || 0)
+    })
   })
 
   let extraTotal = 0
@@ -3013,7 +3150,8 @@ function renderPayrollTable(title, rows, isMonth = false) {
   const monthKey = String(entries[0][0] || '')
   const monthHours = Number(entries[0][1] || 0)
   const selectedEmpId = document.getElementById('payrollEmployeeFilter')?.value
-  const overview = isMonth && selectedEmpId ? calculateMonthlyPayrollOverview(String(selectedEmpId), monthKey) : null
+  const overview =
+    isMonth && selectedEmpId ? calculateMonthlyPayrollOverview(String(selectedEmpId), monthKey) : null
 
   const fmt = (v) => (Math.abs(Number(v || 0)) < 1e-9 ? '&nbsp;' : `€${Number(v).toFixed(2)}`)
 
@@ -3108,7 +3246,7 @@ function aggregatePayrollClient(state, employeeId = null) {
   const officialPaidIfAbsent = rules.officialHolidayPaidIfAbsent !== false
   const officialMultiplier = Number(rules.officialHolidayPayMultiplier ?? 1) || 1
 
-  const empMap = new Map((employees || []).map((e) => [String(e.vat || ""), e]))
+  const empMap = new Map((employees || []).map((e) => [String(e.vat || ''), e]))
   const selectedIds = employeeId != null ? [String(employeeId)] : [...empMap.keys()]
 
   const daily = {}
@@ -3203,8 +3341,12 @@ function aggregatePayrollClient(state, employeeId = null) {
           }
         }
       } else if (isWorkingType(shift)) {
-        const worked = shiftHours(shift.start || '00:00', shift.end || '00:00') + ((shift.start2 && shift.end2) ? shiftHours(shift.start2, shift.end2) : 0)
-        const night = nightHours(shift.start || '00:00', shift.end || '00:00') + ((shift.start2 && shift.end2) ? nightHours(shift.start2, shift.end2) : 0)
+        const worked =
+          shiftHours(shift.start || '00:00', shift.end || '00:00') +
+          (shift.start2 && shift.end2 ? shiftHours(shift.start2, shift.end2) : 0)
+        const night =
+          nightHours(shift.start || '00:00', shift.end || '00:00') +
+          (shift.start2 && shift.end2 ? nightHours(shift.start2, shift.end2) : 0)
         let premiumFactor = 1
         if (isHolidayOrSunday) premiumFactor += 0.75
         if (night > 0 && worked > 0) premiumFactor += (night / worked) * 0.25
@@ -3277,7 +3419,9 @@ function exportSelectedMonthData() {
     })
 
   const monthShifts = {}
-  monthShiftsEntries.forEach((e) => { monthShifts[e.k] = e.v })
+  monthShiftsEntries.forEach((e) => {
+    monthShifts[e.k] = e.v
+  })
 
   const weeksFromShifts = new Set(monthShiftsEntries.map((e) => e.week).filter(Boolean))
   Object.keys(snapshot.weekBusinessHours || {}).forEach((wk) => {
@@ -3294,9 +3438,6 @@ function exportSelectedMonthData() {
     if (snapshot.weekBusinessHours?.[wk]) monthWeekBusinessHours[wk] = snapshot.weekBusinessHours[wk]
     if (snapshot.weekHolidays?.[wk]) monthWeekHolidays[wk] = snapshot.weekHolidays[wk]
   })
-
-  const selectedEmpId = document.getElementById('payrollEmployeeFilter')?.value || ''
-  const payrollOverview = selectedEmpId ? calculateMonthlyPayrollOverview(String(selectedEmpId), monthFilter) : null
 
   const out = {
     __meta: { exportedAt: Date.now(), month: monthFilter, mode: 'month-compact' },
@@ -3315,19 +3456,28 @@ function exportSelectedMonthData() {
     shifts: monthShifts,
   }
 
-  if (payrollOverview) {
-    out.payrollSummary = {
-      employeeId: String(selectedEmpId),
-      month: monthFilter,
-      baseHourlyRate: payrollOverview.baseHourlyRate,
-      totals: {
-        salaryTotal: payrollOverview.salaryTotal,
-        extraTotal: payrollOverview.extraTotal,
-        grandTotal: payrollOverview.grandTotal,
-      },
-      hours: payrollOverview.hours,
-      amounts: payrollOverview.amounts,
-    }
+  const allPayrollSummaries = (snapshot.employees || [])
+    .map((emp) => {
+      const overview = calculateMonthlyPayrollOverview(String(emp.vat), monthFilter)
+      if (!overview) return null
+      return {
+        employeeId: String(emp.vat),
+        employeeName: String(emp.nickName || ''),
+        month: monthFilter,
+        baseHourlyRate: overview.baseHourlyRate,
+        totals: {
+          salaryTotal: overview.salaryTotal,
+          extraTotal: overview.extraTotal,
+          grandTotal: overview.grandTotal,
+        },
+        hours: overview.hours,
+        amounts: overview.amounts,
+      }
+    })
+    .filter(Boolean)
+
+  if (allPayrollSummaries.length > 0) {
+    out.payrollSummaries = allPayrollSummaries
   }
 
   const dataStr = JSON.stringify(out, null, 2)
@@ -3358,7 +3508,8 @@ function openWorkRestModal() {
   weekEnd.setDate(weekEnd.getDate() + 6)
   const startStr = currentWeekStart.toLocaleDateString('el-GR')
   const endStr = weekEnd.toLocaleDateString('el-GR')
-  document.getElementById('workRestTitle').textContent = `📊 Διαστήματα Εργασίας/Ανάπαυσης (${startStr} - ${endStr})`
+  document.getElementById('workRestTitle').textContent =
+    `📊 Διαστήματα Εργασίας/Ανάπαυσης (${startStr} - ${endStr})`
 
   renderWorkRestDiagram()
   document.getElementById('workRestModal').classList.add('active')
@@ -3532,7 +3683,9 @@ function importSchedule() {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
 
-    const appendMode = confirm('Append mode? OK = append/merge with existing data, Cancel = replace with imported data.')
+    const appendMode = confirm(
+      'Append mode? OK = append/merge with existing data, Cancel = replace with imported data.',
+    )
 
     try {
       let nextData = appendMode ? normalizeLoadedState(data) : normalizeLoadedState({})
@@ -3540,9 +3693,7 @@ function importSchedule() {
       for (const file of files) {
         const raw = await file.text()
         const parsed = JSON.parse(raw)
-        nextData = appendMode
-          ? mergeImportedState(nextData, parsed)
-          : normalizeLoadedState(parsed)
+        nextData = appendMode ? mergeImportedState(nextData, parsed) : normalizeLoadedState(parsed)
       }
 
       data = nextData
@@ -3560,7 +3711,6 @@ function importSchedule() {
 
 // Multi-cell selection handlers
 function handleCellClick(event, employeeId, dateStr, isClosed) {
-
   // Check if Ctrl/Cmd is held or multi-select mode is on
   if (event.ctrlKey || event.metaKey || isMultiSelectMode) {
     toggleCellSelection(employeeId, dateStr)
@@ -3658,7 +3808,8 @@ function openShiftModalForSelection() {
   document.getElementById('shiftStart').value = businessDay.open
   document.getElementById('shiftEnd').value = businessDay.close
   document.getElementById('hasSecondShift').checked = false
-  const t2 = document.getElementById('shiftType2'); if (t2) t2.value = document.getElementById('shiftType').value === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
+  const t2 = document.getElementById('shiftType2')
+  if (t2) t2.value = document.getElementById('shiftType').value === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
   document.getElementById('shiftStart2').value = ''
   document.getElementById('shiftEnd2').value = ''
   toggleSecondShiftFields()
@@ -3674,30 +3825,50 @@ function openCardDiffModal() {
 }
 
 function parseCardFile(text) {
-  const lines = String(text || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter(Boolean)
   if (!lines.length) return []
 
   // Plain machine format fallback:
   // <VAT> <YYYY-MM-DD> <HH:MM-HH:MM>
   const plainRe = /^(\S+)\s+(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/
   if (plainRe.test(lines[0])) {
-    return lines.map((ln) => {
-      const m = ln.match(plainRe)
-      if (!m) return null
-      return { employee: m[1], date: m[2], in: m[3], out: m[4] }
-    }).filter(Boolean)
+    return lines
+      .map((ln) => {
+        const m = ln.match(plainRe)
+        if (!m) return null
+        return { employee: m[1], date: m[2], in: m[3], out: m[4] }
+      })
+      .filter(Boolean)
   }
 
   const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ','
   const headers = lines[0].split(delimiter).map((h) => h.trim().toLowerCase())
   const idx = {
-    employee: headers.findIndex((h) => ['employee', 'name', 'employee_name', 'εργαζόμενος', 'ονομα', 'nick', 'nickname', 'vat', 'afm', 'αφμ'].includes(h)),
+    employee: headers.findIndex((h) =>
+      [
+        'employee',
+        'name',
+        'employee_name',
+        'εργαζόμενος',
+        'ονομα',
+        'nick',
+        'nickname',
+        'vat',
+        'afm',
+        'αφμ',
+      ].includes(h),
+    ),
     date: headers.findIndex((h) => ['date', 'day', 'ημερομηνια', 'ημ/νια'].includes(h)),
     in: headers.findIndex((h) => ['in', 'checkin', 'clockin', 'εισοδος', 'start'].includes(h)),
     out: headers.findIndex((h) => ['out', 'checkout', 'clockout', 'εξοδος', 'end'].includes(h)),
   }
   if (idx.employee < 0 || idx.date < 0 || idx.in < 0 || idx.out < 0) {
-    throw new Error('Missing columns. Need employee/date/in/out or plain format: <VAT> <YYYY-MM-DD> <HH:MM-HH:MM>')
+    throw new Error(
+      'Missing columns. Need employee/date/in/out or plain format: <VAT> <YYYY-MM-DD> <HH:MM-HH:MM>',
+    )
   }
 
   return lines.slice(1).map((ln) => {
@@ -3749,8 +3920,10 @@ function diffMinutes(schedule, actual) {
 function bestShiftDiffForCard(shift, actualIn, actualOut) {
   if (!isWorkingType(shift)) return null
   const candidates = []
-  if (shift.start && shift.end) candidates.push({ in: shift.start, out: shift.end, label: `${shift.start}-${shift.end}` })
-  if (shift.start2 && shift.end2) candidates.push({ in: shift.start2, out: shift.end2, label: `${shift.start2}-${shift.end2}` })
+  if (shift.start && shift.end)
+    candidates.push({ in: shift.start, out: shift.end, label: `${shift.start}-${shift.end}` })
+  if (shift.start2 && shift.end2)
+    candidates.push({ in: shift.start2, out: shift.end2, label: `${shift.start2}-${shift.end2}` })
   if (!candidates.length) return null
 
   let best = null
@@ -3768,8 +3941,10 @@ function bestShiftDiffForCard(shift, actualIn, actualOut) {
 function bestShiftDiffForCardWithUsed(shift, actualIn, actualOut, used = new Set()) {
   if (!isWorkingType(shift)) return null
   const candidates = []
-  if (shift.start && shift.end) candidates.push({ in: shift.start, out: shift.end, label: `${shift.start}-${shift.end}`, idx: 1 })
-  if (shift.start2 && shift.end2) candidates.push({ in: shift.start2, out: shift.end2, label: `${shift.start2}-${shift.end2}`, idx: 2 })
+  if (shift.start && shift.end)
+    candidates.push({ in: shift.start, out: shift.end, label: `${shift.start}-${shift.end}`, idx: 1 })
+  if (shift.start2 && shift.end2)
+    candidates.push({ in: shift.start2, out: shift.end2, label: `${shift.start2}-${shift.end2}`, idx: 2 })
 
   const available = candidates.filter((c) => !used.has(c.idx))
   const pool = available.length ? available : candidates
@@ -3796,19 +3971,36 @@ async function runCardDiffReport() {
   } catch (err) {
     console.error('Card file read failed', err)
     if (inputEl) inputEl.value = ''
-    alert('Δεν μπόρεσα να διαβάσω το αρχείο (πιθανό permission/stale reference). Επίλεξε ξανά το αρχείο κάρτας και ξαναδοκίμασε.')
+    alert(
+      'Δεν μπόρεσα να διαβάσω το αρχείο (πιθανό permission/stale reference). Επίλεξε ξανά το αρχείο κάρτας και ξαναδοκίμασε.',
+    )
     return
   }
 
   const rows = parseCardFile(fileText)
   if (!rows.length) return alert('Δεν βρέθηκαν γραμμές στο αρχείο κάρτας')
 
-  const employeeByName = Object.fromEntries((data.employees || []).map((e) => [String(e.nickName || '').trim().toLowerCase(), e]))
-  const employeeByNick = Object.fromEntries((data.employees || []).map((e) => [String(e.nickName || '').trim().toLowerCase(), e]))
+  const employeeByName = Object.fromEntries(
+    (data.employees || []).map((e) => [
+      String(e.nickName || '')
+        .trim()
+        .toLowerCase(),
+      e,
+    ]),
+  )
+  const employeeByNick = Object.fromEntries(
+    (data.employees || []).map((e) => [
+      String(e.nickName || '')
+        .trim()
+        .toLowerCase(),
+      e,
+    ]),
+  )
   const employeeByVat = Object.fromEntries((data.employees || []).map((e) => [String(e.vat || '').trim(), e]))
 
   const firstDate = normalizeCardDate(rows[0]?.date)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(firstDate)) return alert('Μη έγκυρη ημερομηνία στην πρώτη γραμμή αρχείου κάρτας')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(firstDate))
+    return alert('Μη έγκυρη ημερομηνία στην πρώτη γραμμή αρχείου κάρτας')
   const monthKey = firstDate.slice(0, 7)
   const year = Number(monthKey.slice(0, 4))
   const month = Number(monthKey.slice(5, 7))
@@ -3817,7 +4009,8 @@ async function runCardDiffReport() {
   const machineByVatDay = {}
   rows.forEach((r) => {
     const rawEmp = String(r.employee || '').trim()
-    const emp = employeeByVat[rawEmp] || employeeByNick[rawEmp.toLowerCase()] || employeeByName[rawEmp.toLowerCase()]
+    const emp =
+      employeeByVat[rawEmp] || employeeByNick[rawEmp.toLowerCase()] || employeeByName[rawEmp.toLowerCase()]
     if (!emp) return
     const d = normalizeCardDate(r.date)
     if (!d.startsWith(`${monthKey}-`)) return
@@ -3837,8 +4030,10 @@ async function runCardDiffReport() {
 
       const expectedSegs = []
       if (isWorkingType(sh)) {
-        if (sh.start && sh.end) expectedSegs.push({ in: sh.start, out: sh.end, label: `${sh.start}-${sh.end}` })
-        if (sh.start2 && sh.end2) expectedSegs.push({ in: sh.start2, out: sh.end2, label: `${sh.start2}-${sh.end2}` })
+        if (sh.start && sh.end)
+          expectedSegs.push({ in: sh.start, out: sh.end, label: `${sh.start}-${sh.end}` })
+        if (sh.start2 && sh.end2)
+          expectedSegs.push({ in: sh.start2, out: sh.end2, label: `${sh.start2}-${sh.end2}` })
       }
 
       if (!expectedSegs.length && actualLines.length) {
@@ -3916,7 +4111,6 @@ async function runCardDiffReport() {
     }
   })
 
-
   const out = document.getElementById('cardDiffReport')
   if (!issues.length) {
     out.innerHTML = '<p style="color:#16a34a; font-weight:600;">Δεν βρέθηκαν αποκλίσεις πάνω από το όριο.</p>'
@@ -3925,7 +4119,8 @@ async function runCardDiffReport() {
 
   const rowsHtml = issues
     .map((x) => {
-      if (x.type !== 'DIFF') return `<tr><td>${x.employee || '-'}</td><td>${x.date || '-'}</td><td colspan="5">${x.note}</td></tr>`
+      if (x.type !== 'DIFF')
+        return `<tr><td>${x.employee || '-'}</td><td>${x.date || '-'}</td><td colspan="5">${x.note}</td></tr>`
       return `<tr><td>${x.employee}</td><td>${x.date}</td><td>${x.sched}</td><td>${x.actual}</td><td>${x.inDiffHours.toFixed(2)}</td><td>${x.outDiffHours.toFixed(2)}</td><td>${x.workDeltaHours.toFixed(2)}</td></tr>`
     })
     .join('')
