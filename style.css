@@ -1,0 +1,1415 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: white;
+  text-align: center;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.controls {
+  background: white;
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.controls button {
+  padding: 10px 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #5a6fd6;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: #e0e5ec;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background: #d0d5dc;
+}
+
+.btn-danger {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
+}
+
+.btn-active {
+  background: #764ba2;
+  color: white;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.week-nav span {
+  font-weight: 600;
+  min-width: 5px;
+  text-align: center;
+}
+
+.schedule-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.schedule-table th,
+.schedule-table td {
+  padding: 6px 4px;
+  text-align: center;
+  border: 1px solid #e0e5ec;
+  font-size: 0.8em;
+}
+
+.schedule-table th {
+  background: #667eea;
+  color: white;
+  font-weight: 600;
+}
+
+.schedule-table th.closed {
+  background: #95a5a6;
+}
+
+.schedule-table th.clickable {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.schedule-table th.clickable:hover {
+  background: #5a6fd6;
+}
+
+.employee-name {
+  text-align: left !important;
+  font-weight: 600;
+  background: #f8f9fa;
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+  transition: background 0.2s;
+  padding: 2px 4px !important;
+  line-height: 1.2;
+}
+.employee-name:hover {
+  background: #e8f0fe;
+}
+
+.employee-hours {
+  font-size: 0.65em;
+  color: #666;
+  font-weight: normal;
+  line-height: 1.1;
+}
+
+.shift-cell {
+  position: relative;
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+  height: 46px;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 4px !important;
+}
+
+.shift-cell:hover {
+  background: #f0f4ff;
+}
+
+.shift-cell.closed-day {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.shift-cell.rest-day {
+  background: repeating-linear-gradient(45deg,
+      #f8f9fa,
+      #f8f9fa 5px,
+      #e9ecef 5px,
+      #e9ecef 10px);
+}
+
+.shift-block {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.2;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100% - 0px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+}
+
+.shift-time {
+  display: block;
+}
+
+.shift-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.telework-badge {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.overtime-badge {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.yperoria-badge {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.shift-block.absence-holiday {
+  background: linear-gradient(135deg, #26a69a, #00897b);
+}
+
+.shift-block.absence-sick {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.shift-block.absence-other {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+}
+
+.shift-block.absence-paid {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+}
+
+.shift-block.absence-unpaid {
+  background: linear-gradient(135deg, #e67e22, #d35400);
+}
+
+.shift-block.absence-nonwork {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+.business-hours {
+  font-size: 0.65em;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 2px;
+  line-height: 1;
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content.wide {
+  max-width: 700px;
+}
+
+#payrollModal .modal-content.wide {
+  width: 96vw;
+  max-width: 1600px;
+}
+
+.modal-content.timeline-modal {
+  max-width: 95%;
+  width: 1200px;
+}
+
+.modal-content h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e0e5ec;
+  border-radius: 8px;
+  font-size: 1em;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.time-input-24h {
+  width: 80px !important;
+  text-align: center;
+  font-family: monospace;
+  font-size: 1.1em !important;
+  letter-spacing: 1px;
+}
+
+.time-input-24h:invalid {
+  border-color: #e74c3c !important;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-buttons button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.legend-color.working {
+  background: #d4edda;
+  border: 2px solid #28a745;
+}
+
+.legend-color.holiday {
+  background: linear-gradient(135deg, #26a69a, #00897b);
+}
+
+.legend-color.sick {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.legend-color.other {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+}
+
+.legend-color.rest {
+  background: repeating-linear-gradient(45deg,
+      #f8f9fa,
+      #f8f9fa 3px,
+      #e9ecef 3px,
+      #e9ecef 6px);
+  border: 1px solid #ddd;
+}
+
+.legend-color.holiday-legend {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.legend-color.night-legend {
+  background: linear-gradient(135deg, #1a237e, #283593);
+}
+
+.legend-color.holiday-night-legend {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+}
+
+/* Holiday/Sunday header styling */
+.schedule-table th.holiday-header {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.schedule-table th.holiday-header:hover {
+  background: linear-gradient(135deg, #fb8c00, #ef6c00);
+}
+
+.premium-badge {
+  font-size: 0.6em;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-top: 2px;
+  display: inline-block;
+}
+
+/* Holiday/Sunday cell styling */
+.shift-cell.holiday-day {
+  background: #fff8e1;
+}
+
+.shift-cell.holiday-day:hover {
+  background: #fff3c4;
+}
+
+.shift-cell.holiday-day.rest-day {
+  background: repeating-linear-gradient(45deg,
+      #fff8e1,
+      #fff8e1 5px,
+      #ffecb3 5px,
+      #ffecb3 10px);
+}
+
+/* Holiday shift block */
+.shift-block.shift-holiday {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+/* Premium indicators on shift blocks */
+.premium-indicators {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.shift-premium {
+  font-size: 0.6em;
+  padding: 0px 2px;
+  border-radius: 2px;
+  line-height: 1.2;
+}
+
+.shift-premium.sun {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.shift-premium.night {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Employee cost display */
+.employee-cost {
+  font-size: 0.6em;
+  color: #27ae60;
+  font-weight: 600;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+
+.badge-sunday {
+  background: #fff3e0;
+  color: #e65100;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-size: 0.95em;
+}
+
+.badge-night {
+  background: #e8eaf6;
+  color: #1a237e;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-size: 0.95em;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.summary-card h3 {
+  color: #667eea;
+  font-size: 2em;
+  margin-bottom: 5px;
+}
+
+.summary-card p {
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* Hours bar */
+.hours-bar {
+  width: 100%;
+  height: 4px;
+  background: #e0e5ec;
+  border-radius: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.hours-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.hours-fill.warning {
+  background: linear-gradient(90deg, #f39c12, #e67e22);
+}
+
+.hours-fill.danger {
+  background: linear-gradient(90deg, #e74c3c, #c0392b);
+}
+
+.employee-row {
+  transition: background 0.2s;
+}
+
+.employee-row:hover {
+  background: #f8f9fa;
+}
+
+.delete-employee {
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 1.2em;
+  margin-left: 10px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.delete-employee:hover {
+  opacity: 1;
+}
+
+/* Checkbox styling */
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: auto;
+}
+
+#absencePoliciesForm input[type="checkbox"] {
+  width: auto;
+  transform: scale(1.2);
+}
+
+/* Timeline View Styles */
+.timeline-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.timeline-header h2 {
+  color: #333;
+  font-size: 1.2em;
+}
+
+.timeline-day-selector {
+  display: flex;
+  gap: 5px;
+}
+
+.timeline-day-btn {
+  padding: 8px 12px;
+  border: 2px solid #e0e5ec;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.timeline-day-btn:hover {
+  border-color: #667eea;
+}
+
+.timeline-day-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.timeline-day-btn.closed {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.timeline-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 2px;
+  background: #e0e5ec;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.timeline-hours-header {
+  grid-column: 2;
+  display: flex;
+  background: #667eea;
+}
+
+.timeline-hour-label {
+  flex: 1;
+  text-align: center;
+  padding: 6px 1px;
+  font-size: 0.7em;
+  color: white;
+  font-weight: 600;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timeline-employee-row {
+  display: contents;
+}
+
+.timeline-employee-name {
+  background: #f8f9fa;
+  padding: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  font-size: 0.8em;
+}
+
+.timeline-employee-hours {
+  display: flex;
+  background: white;
+  position: relative;
+}
+
+.timeline-hour-cell {
+  flex: 1;
+  height: 32px;
+  border-right: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.timeline-hour-cell.business-open {
+  background: #f8fff8;
+}
+
+.timeline-hour-cell.business-closed {
+  background: #f5f5f5;
+}
+
+.timeline-shift-bar {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  background: transparent;
+  border-radius: 4px;
+  z-index: 1;
+  cursor: move;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Colored segments inside shift bar */
+.timeline-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+}
+
+.timeline-segment.seg-regular {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+.timeline-segment.seg-night {
+  background: linear-gradient(135deg, #1a237e, #283593);
+}
+
+.timeline-segment.seg-holiday {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.timeline-segment.seg-holiday-night {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+}
+
+/* Night hour cell background tint */
+.timeline-hour-cell.night-hour {
+  background: #e8eaf6 !important;
+}
+
+.timeline-shift-bar:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-shift-bar .drag-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.timeline-shift-bar .drag-handle.left {
+  left: -2px;
+  border-radius: 4px 0 0 4px;
+}
+
+.timeline-shift-bar .drag-handle.right {
+  right: -2px;
+  border-radius: 0 4px 4px 0;
+}
+
+.timeline-shift-bar .drag-handle:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.timeline-shift-bar .time-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.timeline-shift-bar.dragging {
+  opacity: 0.8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.timeline-shift-bar.absence-holiday {
+  background: linear-gradient(135deg, #26a69a, #00897b);
+}
+
+.timeline-shift-bar.absence-sick {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.timeline-shift-bar.absence-other {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+}
+
+.timeline-current-time {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e74c3c;
+  z-index: 10;
+}
+
+.timeline-current-time::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  background: #e74c3c;
+  border-radius: 50%;
+}
+
+.staff-count-row {
+  display: contents;
+}
+
+.staff-count-label {
+  background: #667eea;
+  color: white;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.staff-count-cells {
+  display: flex;
+  background: #f0f4ff;
+}
+
+.staff-count-cell {
+  flex: 1;
+  text-align: center;
+  padding: 8px 2px;
+  font-weight: 700;
+  font-size: 0.9em;
+  border-right: 1px solid #e0e5ec;
+}
+
+.staff-count-cell.low {
+  background: #ffebee;
+  color: #c0392b;
+}
+
+.staff-count-cell.medium {
+  background: #fff8e1;
+  color: #f39c12;
+}
+
+.staff-count-cell.good {
+  background: #e8f5e9;
+  color: #27ae60;
+}
+
+.staff-count-cell.outside-hours {
+  opacity: 0.6;
+}
+
+.payroll-table .week-separator td {
+  background: #f1f4ff;
+  text-align: left;
+  font-size: 0.82em;
+  color: #4a5cc7;
+}
+
+.payroll-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.payroll-tab-btn {
+  border: 1px solid #cfd8ff;
+  background: #f8faff;
+  color: #3b4cca;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.payroll-tab-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: #fff;
+}
+
+.rest-days-week {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.rest-days-week-title {
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .controls button {
+    padding: 8px 10px;
+    font-size: 0.78em;
+    flex: 1 1 calc(25% - 8px);
+    min-width: 64px;
+  }
+
+  .week-nav {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+    order: -1;
+    margin-bottom: 5px;
+  }
+
+  .week-nav span {
+    min-width: 5px;
+    font-size: 0.9em;
+  }
+
+  .timeline-day-selector {
+    flex-wrap: wrap;
+  }
+
+  .schedule-container {
+    padding: 10px;
+  }
+
+  .schedule-table {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    padding: 3px 2px;
+    font-size: 0.7em;
+  }
+
+  .employee-name {
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+  }
+
+  .shift-cell {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    height: 40px;
+    padding: 2px !important;
+  }
+
+  .shift-block {
+    padding: 2px 3px;
+    font-size: 0.66em;
+    border-radius: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 8px;
+  }
+
+  h1 {
+    font-size: 1.05em;
+  }
+
+  .controls {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .controls button {
+    padding: 6px 8px;
+    font-size: 0.72em;
+    flex: 1 1 calc(33.33% - 6px);
+    min-width: 56px;
+  }
+
+  .week-nav span {
+    min-width: 120px;
+    font-size: 0.78em;
+  }
+
+  .schedule-container {
+    padding: 8px;
+  }
+
+  .schedule-table {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    padding: 2px 1px;
+    font-size: 0.6em;
+  }
+
+  .employee-name {
+    width: 84px;
+    min-width: 84px;
+    max-width: 84px;
+  }
+
+  .shift-cell {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 34px;
+    padding: 1px !important;
+  }
+
+  .shift-block {
+    padding: 1px 2px;
+    font-size: 0.56em;
+    border-radius: 5px;
+    gap: 1px;
+  }
+
+  .shift-badges {
+    gap: 2px;
+  }
+
+  .telework-badge,
+  .overtime-badge,
+  .yperoria-badge {
+    padding: 0 3px;
+    font-size: 0.64em;
+  }
+
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Print styles - landscape, data only */
+@media print {
+  @page {
+    size: landscape;
+    margin: 1cm;
+  }
+
+  body {
+    background: white !important;
+    font-size: 11pt;
+    font-family: Arial, sans-serif;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .container {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  h1,
+  .summary-cards,
+  .controls,
+  .legend,
+  .modal,
+  .delete-employee,
+  .hours-bar,
+  .employee-hours,
+  .business-hours {
+    display: none !important;
+  }
+
+  .schedule-container {
+    padding: 0;
+    box-shadow: none !important;
+    background: white !important;
+    border-radius: 0 !important;
+  }
+
+  .schedule-table {
+    width: 100%;
+    border: 1pt solid black !important;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 10pt;
+    background: white !important;
+    table-layout: fixed;
+  }
+
+  .schedule-table thead {
+    display: table-header-group;
+  }
+
+  .schedule-table tbody {
+    display: table-row-group;
+  }
+
+  .schedule-table tr {
+    page-break-inside: avoid;
+    background: white !important;
+  }
+
+  .schedule-table th,
+  .schedule-table th.closed,
+  .schedule-table th.clickable {
+    border: 1pt solid black !important;
+    padding: 8px 10px;
+    text-align: center;
+    color: black !important;
+    font-weight: bold;
+    background: white !important;
+    background-color: white !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .schedule-table td {
+    border: 1pt solid black !important;
+    padding: 8px 10px;
+    text-align: center;
+    color: black !important;
+    background: white !important;
+    background-color: white !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .schedule-table small {
+    color: black !important;
+  }
+
+  .employee-name {
+    text-align: left !important;
+    font-weight: normal;
+    background: white !important;
+    background-color: white !important;
+  }
+
+  .shift-cell,
+  .shift-cell.closed-day,
+  .shift-cell.rest-day,
+  .shift-cell.selected-cell {
+    background: white !important;
+    background-color: white !important;
+    background-image: none !important;
+    border: 1pt solid black !important;
+    height: 34px !important;
+  }
+
+  .shift-block,
+  .shift-block.absence-holiday,
+  .shift-block.absence-sick,
+  .shift-block.absence-other {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: black !important;
+    padding: 0;
+    font-size: 10pt;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  .shift-block.absence-holiday::before {
+    content: "[H] ";
+  }
+
+  .shift-block.absence-sick::before {
+    content: "[S] ";
+  }
+
+  .shift-block.absence-other::before {
+    content: "[A] ";
+  }
+
+  /* Print header */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 15px;
+    font-weight: bold;
+    font-size: 16pt;
+    color: black !important;
+  }
+}
+
+.print-header {
+  display: none;
+}
+
+/* Multi-select cell styling */
+.shift-cell.selected-cell {
+  background: #e3f2fd !important;
+  box-shadow: inset 0 0 0 3px #2196f3;
+}
+
+.shift-cell.selected-cell:hover {
+  background: #bbdefb !important;
+}
+
+.cell-hover-preview {
+  position: absolute;
+  z-index: 3000;
+  transform: translate(-50%, -100%);
+  transform-origin: center bottom;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cell-hover-preview.active {
+  opacity: 1;
+}
+
+.cell-hover-preview .shift-block {
+  min-width: 160px;
+  min-height: 64px;
+  font-size: 0.95em;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  padding: 8px 10px;
+}
+
+.cell-hover-preview .shift-badges .telework-badge,
+.cell-hover-preview .shift-badges .overtime-badge,
+.cell-hover-preview .shift-badges .yperoria-badge {
+  font-size: 0.9em;
+}
+
+.selection-actions {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  margin-left: auto;
+}
+
+.selection-count {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.btn-active {
+  background: #764ba2 !important;
+  color: white !important;
+}
+
+/* Work/Rest Intervals Diagram */
+.work-rest-container {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 8px;
+  overflow-x: auto;
+}
+
+.work-rest-header {
+  display: contents;
+}
+
+.work-rest-header-name {
+  /* Spacer cell above employee names column */
+  display: block;
+}
+
+.work-rest-row {
+  display: contents;
+}
+
+.work-rest-name {
+  font-weight: 600;
+  font-size: 0.8em;
+  color: #333;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-rest-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f0f0f0;
+  position: relative;
+}
+
+.work-rest-day-separator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.work-rest-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.7em;
+  font-weight: 600;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.work-rest-segment.work {
+  background: #d4edda;
+  border: 2px solid #28a745;
+  color: #155724;
+  text-shadow: none;
+}
+
+.work-rest-segment.rest {
+  background: repeating-linear-gradient(
+    45deg,
+    #e9ecef,
+    #e9ecef 5px,
+    #f8f9fa 5px,
+    #f8f9fa 10px
+  );
+  color: #666;
+  text-shadow: none;
+}
+
+.work-rest-segment .segment-label {
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.work-rest-day-markers {
+  display: flex;
+  font-size: 0.7em;
+  color: #999;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 2px;
+}
+
+.work-rest-day-marker {
+  flex: 1;
+  text-align: center;
+}
+
