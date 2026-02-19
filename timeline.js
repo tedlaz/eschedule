@@ -190,7 +190,15 @@ function renderTimeline() {
       const endHour = getEffectiveEndHour(it.start, it.end)
       const startOffset = ((startHour - hours[0]) / hours.length) * 100
       const width = ((endHour - startHour) / hours.length) * 100
-      const segments = buildTimelineSegments(startHour, endHour, isHolidayOrSun, hours[0], hours.length, emp.vat, dateStr)
+      const segments = buildTimelineSegments(
+        startHour,
+        endHour,
+        isHolidayOrSun,
+        hours[0],
+        hours.length,
+        emp.vat,
+        dateStr,
+      )
 
       html += `<div class="timeline-shift-bar"
                 data-employee-id="${emp.vat}"
@@ -417,4 +425,3 @@ function handleShiftBarMouseUp(e) {
   document.removeEventListener('mousemove', handleShiftBarMouseMove)
   document.removeEventListener('mouseup', handleShiftBarMouseUp)
 }
-
