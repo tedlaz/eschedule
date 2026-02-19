@@ -80,21 +80,6 @@ function classifyWeekSlices(employeeId, weekKey) {
     return src >= weekKey && src <= weekEnd
   }
 
-  const slices = []
-  for (let i = 0; i < 7; i++) {
-    const day = formatISODateLocal(
-      new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i),
-    )
-    const sh = data.shifts?.[`${employeeId}_${day}`]
-    if (!isWorkingType(sh)) continue
-    slices.push(...shiftRangeToSlices(day, sh.start, sh.end, sh.type))
-    if (sh.start2 && sh.end2) slices.push(...shiftRangeToSlices(day, sh.start2, sh.end2, sh.type2 || sh.type))
-  }
-
-  const filtered = slices.filter((x) => inWeek(x)).sort((a, b) => a.absOrder.localeCompare(b.absOrder))
-  const byShiftDayWorked = {}
-  let weekWorked = 0
-
   const _PR4 = window.PAYROLL_RULES || {}
   const _dailyIllegal = _PR4.dailyIllegalThreshold ?? 11
   const _dailyYp = _PR4.dailyYpThreshold ?? 9
@@ -102,31 +87,90 @@ function classifyWeekSlices(employeeId, weekKey) {
   const _weekNorm4 = _PR4.weeklyNormalMax ?? 40
   const _weekYe4 = _PR4.weeklyYeMax ?? 45
 
-  return filtered.map((sl) => {
-    const thresholdDay = sl.sourceDay || sl.day
-    const dayWorked = byShiftDayWorked[thresholdDay] || 0
-    let category = 'within'
-    if (dayWorked >= _dailyIllegal)
-      category = 'illegal' // 12η+
-    else if (dayWorked >= _dailyYp)
-      category = 'yp' // 10η-11η
-    else if (dayWorked >= _dailyYe)
-      category = 'ye' // 9η
-    else if (
-      Number(weekTarget || _weekNorm4) < _weekNorm4 &&
-      weekWorked >= Number(weekTarget || _weekNorm4) &&
-      weekWorked < _weekNorm4
+  // Build per-day slice arrays (Mon=0 … Sun=6), sorted by time within each day
+  const slicesByDay = []
+  for (let i = 0; i < 7; i++) {
+    const day = formatISODateLocal(
+      new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i),
     )
-      category = 'additional'
-    else if (weekWorked >= _weekNorm4 && weekWorked < _weekYe4)
-      category = 'ye' // εβδομαδιαία
-    else if (weekWorked >= _weekYe4) category = 'yp'
+    const sh = data.shifts?.[`${employeeId}_${day}`]
+    if (!isWorkingType(sh)) {
+      slicesByDay.push([])
+      continue
+    }
+    const daySlices = [
+      ...shiftRangeToSlices(day, sh.start, sh.end, sh.type),
+      ...(sh.start2 && sh.end2 ? shiftRangeToSlices(day, sh.start2, sh.end2, sh.type2 || sh.type) : []),
+    ]
+      .filter((x) => inWeek(x))
+      .sort((a, b) => a.absOrder.localeCompare(b.absOrder))
+    slicesByDay.push(daySlices)
+  }
 
-    byShiftDayWorked[thresholdDay] = dayWorked + sl.hours
-    weekWorked += sl.hours
+  // Phase 1: apply daily thresholds to separate fixed categories.
+  // Slices 0–8h/day are "eligible" for weekly round-robin.
+  // Slices 8–9h/day are fixed ye.
+  // Slices 9–11h/day are fixed yp.
+  // Slices 11h+/day are fixed illegal.
+  const dailyFixed = []
+  const dailyEligible = []
+  for (let i = 0; i < 7; i++) {
+    let dayWorked = 0
+    const eligible = []
+    for (const sl of slicesByDay[i]) {
+      if (dayWorked >= _dailyIllegal) {
+        dailyFixed.push({ ...sl, category: 'illegal' })
+      } else if (dayWorked >= _dailyYp) {
+        dailyFixed.push({ ...sl, category: 'yp' })
+      } else if (dayWorked >= _dailyYe) {
+        dailyFixed.push({ ...sl, category: 'ye' })
+      } else {
+        eligible.push(sl)
+      }
+      dayWorked += sl.hours
+    }
+    dailyEligible.push(eligible)
+  }
 
-    return { ...sl, category }
-  })
+  // Phase 2: round-robin weekly bucketing of eligible slices.
+  // Cycle Mon→Sun→Mon, taking up to 1 HOUR (4 slices) per day per pass.
+  // Each slice is classified based on cumulative weekly hours from eligible slices:
+  //   0 … weekTarget          → within
+  //   weekTarget … weeklyMax  → additional  (part-time only; full-time skips to ye)
+  //   weeklyMax  … yeMax      → ye
+  //   yeMax+                  → yp
+  // Note: eligible slices are only 0–8h/day; 8h+ are already fixed in Phase 1.
+  const SLICES_PER_ROUND = 4 // 4 × 15min = 1 hour per day per round
+  const weeklyClassified = []
+  const ptrs = new Array(7).fill(0)
+  let weekWorked = 0
+  let anyLeft = true
+  while (anyLeft) {
+    anyLeft = false
+    for (let i = 0; i < 7; i++) {
+      if (ptrs[i] >= dailyEligible[i].length) continue
+      anyLeft = true
+      const take = Math.min(SLICES_PER_ROUND, dailyEligible[i].length - ptrs[i])
+      for (let j = 0; j < take; j++) {
+        const sl = dailyEligible[i][ptrs[i]++]
+        let category
+        if (weekWorked >= _weekYe4) {
+          category = 'yp'
+        } else if (weekWorked >= _weekNorm4) {
+          category = 'ye'
+        } else if (weekWorked >= Number(weekTarget || _weekNorm4)) {
+          category = 'additional'
+        } else {
+          category = 'within'
+        }
+        weekWorked += sl.hours
+        weeklyClassified.push({ ...sl, category })
+      }
+    }
+  }
+
+  // Merge and restore chronological order for downstream consumers
+  return [...weeklyClassified, ...dailyFixed].sort((a, b) => a.absOrder.localeCompare(b.absOrder))
 }
 
 function getEmployeeDayPayrollMetrics(employeeId, day) {
@@ -559,8 +603,12 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
 
   let salaryTotal = 0
   if (isMonthly) {
-    const absDays = countMonthlyAbsenceDaysInMonth(emp.vat, monthFilter, Number(emp.weekWorkingDays || 5))
-    const deduction = (monthlySalary / (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) * absDays
+    const _mwd = window.PAYROLL_RULES?.monthlyWorkingDays ?? 25
+    const _wd = Number(emp.weekWorkingDays || 5)
+    const _hourlyRateDed = weekHoursCfg > 0 ? monthlySalary / ((weekHoursCfg * _mwd) / 6) : 0
+    const _dailyHoursDed = _wd > 0 ? weekHoursCfg / _wd : 0
+    const absDays = countMonthlyAbsenceDaysInMonth(emp.vat, monthFilter, _wd)
+    const deduction = absDays * _dailyHoursDed * _hourlyRateDed
     salaryTotal = Math.max(0, monthlySalary - deduction)
   }
 
@@ -587,12 +635,18 @@ function renderPayrollTable(title, rows, isMonth = false) {
   const overview =
     isMonth && selectedEmpId ? calculateMonthlyPayrollOverview(String(selectedEmpId), monthKey) : null
 
+  // Use actual worked hours from slice-based calculation when available,
+  // falling back to the aggregated contracted-daily total for non-monthly/overview-less cases.
+  const displayHours = overview
+    ? Math.round(Object.values(overview.hours || {}).reduce((a, v) => a + Number(v || 0), 0) * 100) / 100
+    : monthHours
+
   const fmt = (v) => (Math.abs(Number(v || 0)) < 1e-9 ? '&nbsp;' : `€${Number(v).toFixed(2)}`)
 
   const body = `
     <tr>
       <td>${monthKey}</td>
-      <td>${monthHours.toFixed(2)}</td>
+      <td>${displayHours.toFixed(2)}</td>
       <td>${overview ? fmt(overview.salaryTotal) : '&nbsp;'}</td>
       <td>${overview ? fmt(overview.extraTotal) : '&nbsp;'}</td>
       <td><strong>${overview ? fmt(overview.grandTotal) : '&nbsp;'}</strong></td>
@@ -825,4 +879,3 @@ function aggregatePayrollClient(state, employeeId = null) {
 }
 
 // Export/Import/Print
-

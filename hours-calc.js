@@ -29,7 +29,8 @@ function countMonthlyAbsenceDaysInWeek(employeeId, weekStart, weekDays = 5) {
     const dayDate = new Date(weekStart)
     dayDate.setDate(dayDate.getDate() + i)
     const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-    if (shift && isAbsenceType(shift.type) && !isPaidAbsenceType(shift.type)) abs++
+    if (shift && (isAbsenceType(shift.type) || isNonWorkingType(shift)) && !isPaidAbsenceType(shift.type))
+      abs++
   }
   return abs
 }
@@ -48,7 +49,8 @@ function countMonthlyAbsenceDaysInMonth(employeeId, monthKey, weekDays = 5) {
     const holidays = data.weekHolidays[wk] || []
     if (holidays.includes(dayIdx)) return
     const shift = data.shifts[k]
-    if (shift && isAbsenceType(shift.type) && !isPaidAbsenceType(shift.type)) abs++
+    if (shift && (isAbsenceType(shift.type) || isNonWorkingType(shift)) && !isPaidAbsenceType(shift.type))
+      abs++
   })
   return abs
 }
@@ -199,9 +201,13 @@ function calculateWeekCost(employeeId, weekStart) {
     const totalHours = calculateWeekHours(employeeId, weekStart)
     const monthlySalary = Number(emp.monthlySalary || 0)
     const weeklyBase = Math.round(((monthlySalary * 12) / 52) * 100) / 100
-    const absDays = countMonthlyAbsenceDaysInWeek(employeeId, weekStart, Number(emp.weekWorkingDays || 5))
-    const weeklyDeduction =
-      Math.round((monthlySalary / (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) * absDays * 100) / 100
+    const _mwd = window.PAYROLL_RULES?.monthlyWorkingDays ?? 25
+    const _wh = Number(emp.weekWorkingHours || 40)
+    const _wd = Number(emp.weekWorkingDays || 5)
+    const _hourlyRate = _wh > 0 ? monthlySalary / ((_wh * _mwd) / 6) : 0
+    const _dailyHours = _wd > 0 ? _wh / _wd : 0
+    const absDays = countMonthlyAbsenceDaysInWeek(employeeId, weekStart, _wd)
+    const weeklyDeduction = Math.round(absDays * _dailyHours * _hourlyRate * 100) / 100
     const weeklyCost = Math.max(0, Math.round((weeklyBase - weeklyDeduction) * 100) / 100)
     return {
       totalHours,
