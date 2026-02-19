@@ -7,38 +7,66 @@ function openTimelineModal(dayIndex) {
 
 function renderTimeline() {
   // Build colored segments for a timeline shift bar
-  function buildTimelineSegments(startH, endH, isHoliday, gridStart, gridCount) {
-    // Break the shift into contiguous blocks by type: regular, night, holiday+night
+  function buildTimelineSegments(startH, endH, isHoliday, gridStart, gridCount, employeeId, dateStr) {
     const totalDuration = endH - startH
     if (totalDuration <= 0) return ''
 
-    const blocks = []
-    let cursor = startH
+    // Get payroll classification for this employee's shifts
+    const weekKey = getWeekKeyFromDateStr(dateStr)
+    const classified = classifyWeekSlices(employeeId, weekKey)
+      .filter((s) => (s.sourceDay || s.day) === dateStr)
+      .sort((a, b) => a.absOrder.localeCompare(b.absOrder))
 
-    while (cursor < endH) {
-      const isNight = cursor % 24 >= 22 || cursor % 24 < 6
-      // Find end of this block type
-      let blockEnd = cursor
-      const step = 0.25 // 15-minute resolution
+    // Build map: HH:MM -> category from classified slices
+    // absOrder format: YYYY-MM-DDTHH:MM-idx
+    const categoryByTime = {}
+    classified.forEach((slice) => {
+      const [datePart, timeAndIdx] = slice.absOrder.split('T')
+      const [timeStr] = timeAndIdx.split('-') // HH:MM
+      categoryByTime[timeStr] = slice.category
+    })
+
+    // Walk through shift in 15-min steps, grouping consecutive same (category + day/night)
+    const blocks = []
+    let h = startH
+    const STEP = 0.25 // 15 minutes
+
+    while (h < endH) {
+      // Get category at this hour
+      const hh = Math.floor(h)
+      const mm = Math.round((h - hh) * 60)
+      const timeKey = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+      let category = categoryByTime[timeKey] || 'within'
+
+      // Check if night
+      const isNight = hh % 24 >= 22 || hh % 24 < 6
+
+      // Extend block while category and day/night don't change
+      let blockEnd = h + STEP
       while (blockEnd < endH) {
-        const nextIsNight = blockEnd % 24 >= 22 || blockEnd % 24 < 6
-        if (nextIsNight !== isNight) break
-        blockEnd += step
+        const nextHh = Math.floor(blockEnd)
+        const nextMm = Math.round((blockEnd - nextHh) * 60)
+        const nextTimeKey = `${String(nextHh).padStart(2, '0')}:${String(nextMm).padStart(2, '0')}`
+        const nextCategory = categoryByTime[nextTimeKey] || 'within'
+        const nextIsNight = nextHh % 24 >= 22 || nextHh % 24 < 6
+
+        if (nextCategory !== category || nextIsNight !== isNight) break
+        blockEnd += STEP
       }
       blockEnd = Math.min(blockEnd, endH)
 
-      let segClass = 'seg-regular'
-      if (isHoliday && isNight) segClass = 'seg-holiday-night'
-      else if (isHoliday) segClass = 'seg-holiday'
-      else if (isNight) segClass = 'seg-night'
+      let segClass = `seg-${category}`
+      if (isHoliday && isNight) segClass += ' seg-holiday-night'
+      else if (isHoliday) segClass += ' seg-holiday'
+      else if (isNight) segClass += ' seg-night'
 
-      const leftPct = ((cursor - startH) / totalDuration) * 100
-      const widthPct = ((blockEnd - cursor) / totalDuration) * 100
+      const leftPct = ((h - startH) / totalDuration) * 100
+      const widthPct = ((blockEnd - h) / totalDuration) * 100
 
       blocks.push(
         `<div class="timeline-segment ${segClass}" style="left:${leftPct}%;width:${widthPct}%"></div>`,
       )
-      cursor = blockEnd
+      h = blockEnd
     }
 
     return blocks.join('')
@@ -114,6 +142,13 @@ function renderTimeline() {
     <div style="background: #667eea; padding: 10px; font-weight: 600; color: white;">Employee</div>
     <div class="timeline-hours-header">
       ${hours.map((h) => `<div class="timeline-hour-label">${(h % 24).toString().padStart(2, '0')}:00</div>`).join('')}
+    </div>
+    <div style="grid-column: 1 / -1; padding: 8px; background: #f5f5f5; font-size: 0.85em; display: flex; gap: 16px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #4caf50, #388e3c); border-radius: 2px;"></div><span>Εντός</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #2196f3, #1976d2); border-radius: 2px;"></div><span>Πρόσθετη</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #ff9800, #f57c00); border-radius: 2px;"></div><span>Υπερεργασία</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #f44336, #d32f2f); border-radius: 2px;"></div><span>Υπερωρίες</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #c62828, #880e4f); border-radius: 2px;"></div><span>Παράνομη</span></div>
     </div>`
 
   // Staff count per hour
@@ -155,7 +190,7 @@ function renderTimeline() {
       const endHour = getEffectiveEndHour(it.start, it.end)
       const startOffset = ((startHour - hours[0]) / hours.length) * 100
       const width = ((endHour - startHour) / hours.length) * 100
-      const segments = buildTimelineSegments(startHour, endHour, isHolidayOrSun, hours[0], hours.length)
+      const segments = buildTimelineSegments(startHour, endHour, isHolidayOrSun, hours[0], hours.length, emp.vat, dateStr)
 
       html += `<div class="timeline-shift-bar"
                 data-employee-id="${emp.vat}"

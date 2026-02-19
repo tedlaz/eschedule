@@ -821,19 +821,87 @@ h1 {
   z-index: 0;
 }
 
+/* Payroll category colors - Εντός (within) - Green */
+.timeline-segment.seg-within {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+}
+.timeline-segment.seg-within.seg-night {
+  background: linear-gradient(135deg, #2e7d32, #1b5e20);
+}
+.timeline-segment.seg-within.seg-holiday {
+  background: linear-gradient(135deg, #66bb6a, #43a047);
+}
+.timeline-segment.seg-within.seg-holiday-night {
+  background: linear-gradient(135deg, #2e7d32, #1b5e20);
+}
+
+/* Payroll category colors - Πρόσθετη (additional) - Light Blue */
+.timeline-segment.seg-additional {
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+}
+.timeline-segment.seg-additional.seg-night {
+  background: linear-gradient(135deg, #1565c0, #0d47a1);
+}
+.timeline-segment.seg-additional.seg-holiday {
+  background: linear-gradient(135deg, #42a5f5, #1e88e5);
+}
+.timeline-segment.seg-additional.seg-holiday-night {
+  background: linear-gradient(135deg, #0d47a1, #0d47a1);
+}
+
+/* Payroll category colors - Υπεργασία (ye) - Orange */
+.timeline-segment.seg-ye {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+.timeline-segment.seg-ye.seg-night {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+}
+.timeline-segment.seg-ye.seg-holiday {
+  background: linear-gradient(135deg, #ffb74d, #ff8c42);
+}
+.timeline-segment.seg-ye.seg-holiday-night {
+  background: linear-gradient(135deg, #d84315, #bf360c);
+}
+
+/* Payroll category colors - Υπερωρία (yp) - Red */
+.timeline-segment.seg-yp {
+  background: linear-gradient(135deg, #f44336, #d32f2f);
+}
+.timeline-segment.seg-yp.seg-night {
+  background: linear-gradient(135deg, #b71c1c, #880e4f);
+}
+.timeline-segment.seg-yp.seg-holiday {
+  background: linear-gradient(135deg, #ef5350, #e53935);
+}
+.timeline-segment.seg-yp.seg-holiday-night {
+  background: linear-gradient(135deg, #880e4f, #6a0dad);
+}
+
+/* Payroll category colors - Παράνομη (illegal) - Dark Red/Maroon */
+.timeline-segment.seg-illegal {
+  background: linear-gradient(135deg, #c62828, #880e4f);
+}
+.timeline-segment.seg-illegal.seg-night {
+  background: linear-gradient(135deg, #5e0b6f, #3d1a5c);
+}
+.timeline-segment.seg-illegal.seg-holiday {
+  background: linear-gradient(135deg, #d32f2f, #c62828);
+}
+.timeline-segment.seg-illegal.seg-holiday-night {
+  background: linear-gradient(135deg, #5e0b6f, #3d1a5c);
+}
+
+/* Legacy segment classes for backward compatibility */
 .timeline-segment.seg-regular {
   background: linear-gradient(135deg, #667eea, #764ba2);
 }
-
-.timeline-segment.seg-night {
+.timeline-segment.seg-regular.seg-night {
   background: linear-gradient(135deg, #1a237e, #283593);
 }
-
-.timeline-segment.seg-holiday {
+.timeline-segment.seg-regular.seg-holiday {
   background: linear-gradient(135deg, #ff9800, #f57c00);
 }
-
-.timeline-segment.seg-holiday-night {
+.timeline-segment.seg-regular.seg-holiday-night {
   background: linear-gradient(135deg, #e65100, #bf360c);
 }
 
