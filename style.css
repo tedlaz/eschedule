@@ -486,12 +486,21 @@ h1 {
   background: linear-gradient(135deg, #e65100, #bf360c);
 }
 
-/* Holiday/Sunday header styling */
+/* Holiday header styling (official public holidays) */
 .schedule-table th.holiday-header {
-  background: linear-gradient(135deg, #ff9800, #f57c00);
+  background: linear-gradient(135deg, #c4b5fd, #a78bfa);
 }
 
 .schedule-table th.holiday-header:hover {
+  background: linear-gradient(135deg, #b39dfa, #9474f0);
+}
+
+/* Sunday header styling */
+.schedule-table th.sunday-header {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+}
+
+.schedule-table th.sunday-header:hover {
   background: linear-gradient(135deg, #fb8c00, #ef6c00);
 }
 
@@ -956,10 +965,16 @@ h1 {
   opacity: 0.6;
 }
 
+.payroll-table th,
+.payroll-table td {
+  padding: 2px 3px;
+  font-size: 0.74em;
+}
+
 .payroll-table .week-separator td {
   background: #f1f4ff;
   text-align: left;
-  font-size: 0.82em;
+  font-size: 0.78em;
   color: #4a5cc7;
 }
 
@@ -1145,157 +1160,7 @@ h1 {
   }
 }
 
-/* Print styles - landscape, data only */
-@media print {
-  @page {
-    size: landscape;
-    margin: 1cm;
-  }
-
-  body {
-    background: white !important;
-    font-size: 11pt;
-    font-family: Arial, sans-serif;
-    color: black !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  * {
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .container {
-    max-width: 100%;
-    padding: 0;
-  }
-
-  h1,
-  .summary-cards,
-  .controls,
-  .legend,
-  .modal,
-  .delete-employee,
-  .hours-bar,
-  .employee-hours,
-  .business-hours {
-    display: none !important;
-  }
-
-  .schedule-container {
-    padding: 0;
-    box-shadow: none !important;
-    background: white !important;
-    border-radius: 0 !important;
-  }
-
-  .schedule-table {
-    width: 100%;
-    border: 1pt solid black !important;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 10pt;
-    background: white !important;
-    table-layout: fixed;
-  }
-
-  .schedule-table thead {
-    display: table-header-group;
-  }
-
-  .schedule-table tbody {
-    display: table-row-group;
-  }
-
-  .schedule-table tr {
-    page-break-inside: avoid;
-    background: white !important;
-  }
-
-  .schedule-table th,
-  .schedule-table th.closed,
-  .schedule-table th.clickable {
-    border: 1pt solid black !important;
-    padding: 8px 10px;
-    text-align: center;
-    color: black !important;
-    font-weight: bold;
-    background: white !important;
-    background-color: white !important;
-    background-image: none !important;
-    box-shadow: none !important;
-  }
-
-  .schedule-table td {
-    border: 1pt solid black !important;
-    padding: 8px 10px;
-    text-align: center;
-    color: black !important;
-    background: white !important;
-    background-color: white !important;
-    background-image: none !important;
-    box-shadow: none !important;
-  }
-
-  .schedule-table small {
-    color: black !important;
-  }
-
-  .employee-name {
-    text-align: left !important;
-    font-weight: normal;
-    background: white !important;
-    background-color: white !important;
-  }
-
-  .shift-cell,
-  .shift-cell.closed-day,
-  .shift-cell.rest-day,
-  .shift-cell.selected-cell {
-    background: white !important;
-    background-color: white !important;
-    background-image: none !important;
-    border: 1pt solid black !important;
-    height: 34px !important;
-  }
-
-  .shift-block,
-  .shift-block.absence-holiday,
-  .shift-block.absence-sick,
-  .shift-block.absence-other {
-    background: transparent !important;
-    background-color: transparent !important;
-    background-image: none !important;
-    color: black !important;
-    padding: 0;
-    font-size: 10pt;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-  }
-
-  .shift-block.absence-holiday::before {
-    content: "[H] ";
-  }
-
-  .shift-block.absence-sick::before {
-    content: "[S] ";
-  }
-
-  .shift-block.absence-other::before {
-    content: "[A] ";
-  }
-
-  /* Print header */
-  .print-header {
-    display: block !important;
-    text-align: center;
-    margin-bottom: 15px;
-    font-weight: bold;
-    font-size: 16pt;
-    color: black !important;
-  }
-}
+/* Print is handled via a dedicated popup window — no @media print rules needed here */
 
 .print-header {
   display: none;
