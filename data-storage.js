@@ -97,16 +97,22 @@ function shiftTypePriority(shift) {
 function sanitizeStateForPersist(state) {
   const out = { ...state }
 
-  out.employees = (state.employees || []).map((e) => ({
-    vat: String(e.vat || '').trim(),
-    nickName: String(e.nickName || '').trim(),
-    payType: e.payType === 'monthly' ? 'monthly' : 'hourly',
-    hourlyRate: Number(e.hourlyRate || 0),
-    weekWorkingHours: Number(e.weekWorkingHours || 40),
-    monthlySalary: Number(e.monthlySalary || 0),
-    weekWorkingDays: Number(e.weekWorkingDays || 5),
-    defaultRestDays: Array.isArray(e.defaultRestDays) ? e.defaultRestDays : [5, 6],
-  }))
+  out.employees = (state.employees || []).map((e) => {
+    const base = {
+      vat: String(e.vat || '').trim(),
+      nickName: String(e.nickName || '').trim(),
+      payType: e.payType === 'monthly' ? 'monthly' : 'hourly',
+      weekWorkingHours: Number(e.weekWorkingHours || 40),
+      weekWorkingDays: Number(e.weekWorkingDays || 5),
+      defaultRestDays: Array.isArray(e.defaultRestDays) ? e.defaultRestDays : [5, 6],
+    }
+    if (base.payType === 'hourly') {
+      base.hourlyRate = Number(e.hourlyRate || 0)
+    } else {
+      base.monthlySalary = Number(e.monthlySalary || 0)
+    }
+    return base
+  })
 
   const normalizedShiftEntries = []
   const shiftKeyRe = /^(.+?)_(\d{4}-\d{2}-\d{2})$/
