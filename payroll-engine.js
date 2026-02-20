@@ -403,6 +403,16 @@ function setPayrollSummaryTab(tab) {
   btnAmounts.classList.toggle('active', !showHours)
 }
 
+function togglePayrollWeek(weekId) {
+  const weekBody = document.getElementById(weekId)
+  const toggle = document.getElementById(weekId + '-toggle')
+  if (!weekBody || !toggle) return
+
+  const isVisible = weekBody.style.display !== 'none'
+  weekBody.style.display = isVisible ? 'none' : ''
+  toggle.textContent = isVisible ? '▶' : '▼'
+}
+
 function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '') {
   const fullRows = expandToFullMonth(rows || {}, monthFilter)
   const entries = Object.entries(fullRows).sort((a, b) => a[0].localeCompare(b[0]))
@@ -431,78 +441,126 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
     return `<tr class="week-separator"><td colspan="3">${labelHtml}</td>${cells}</tr>`
   }
 
-  let body = ''
-  let amountBody = ''
-  let currentWeek = ''
-  let weekAgg = emptyPayrollBuckets()
-  let weekAmountAgg = emptyPayrollBuckets()
-  let monthAgg = emptyPayrollBuckets()
-  let monthAmountAgg = emptyPayrollBuckets()
+  // Group entries by week
+  const weekGroups = []
+  let currentWeekKey = ''
+  let currentWeekDays = []
+  let currentWeekAgg = emptyPayrollBuckets()
+
+  entries.forEach(([day], idx) => {
+    const weekKey = getWeekKeyFromDateStr(day)
+
+    if (currentWeekKey && weekKey !== currentWeekKey) {
+      // Save previous week
+      weekGroups.push({
+        weekKey: currentWeekKey,
+        days: currentWeekDays,
+        agg: { ...currentWeekAgg },
+      })
+      currentWeekDays = []
+      currentWeekAgg = emptyPayrollBuckets()
+    }
+
+    currentWeekKey = weekKey
+    const m = payrollDayMetrics(day, employeeId)
+    PAYROLL_BUCKET_KEYS.forEach((k) => {
+      currentWeekAgg[k] += Number(m[k] || 0)
+    })
+    currentWeekDays.push({ day, metrics: m })
+
+    // Last entry
+    if (idx === entries.length - 1) {
+      weekGroups.push({
+        weekKey: currentWeekKey,
+        days: currentWeekDays,
+        agg: { ...currentWeekAgg },
+      })
+    }
+  })
 
   const selectedEmp = (data.employees || []).find((e) => String(e.vat) === String(employeeId || ''))
   const isMonthly = selectedEmp?.payType === 'monthly'
   const weekHoursCfg = Number(selectedEmp?.weekWorkingHours || 40)
   const monthlySalary = Number(selectedEmp?.monthlySalary || 0)
-  const isFullTimeMonthly = isMonthly && weekHoursCfg >= 40
-  const isPartTimeMonthly = isMonthly && weekHoursCfg > 0 && weekHoursCfg < 40
   const baseHourlyRate =
     isMonthly && weekHoursCfg > 0
       ? monthlySalary / ((weekHoursCfg * (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) / 6)
       : Number(selectedEmp?.hourlyRate || 0)
 
-  entries.forEach(([day], idx) => {
-    const weekKey = getWeekKeyFromDateStr(day)
-    const m = payrollDayMetrics(day, employeeId)
-
-    if (currentWeek && weekKey !== currentWeek) {
-      const prevWeekStart = parseISODateLocal(currentWeek)
-      const prevWeekEnd = new Date(prevWeekStart)
-      prevWeekEnd.setDate(prevWeekEnd.getDate() + 6)
-      body += subtotalRow(
-        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`,
-        weekAgg,
-      )
-      amountBody += amountSubtotalRow(
-        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${prevWeekStart.toLocaleDateString('el-GR')} - ${prevWeekEnd.toLocaleDateString('el-GR')}</small>`,
-        weekAmountAgg,
-        baseHourlyRate,
-      )
-      weekAgg = emptyPayrollBuckets()
-      weekAmountAgg = emptyPayrollBuckets()
-    }
-
-    currentWeek = weekKey
+  // Calculate month totals
+  let monthAgg = emptyPayrollBuckets()
+  weekGroups.forEach((wk) => {
     PAYROLL_BUCKET_KEYS.forEach((k) => {
-      weekAgg[k] += Number(m[k] || 0)
-      monthAgg[k] += Number(m[k] || 0)
-      weekAmountAgg[k] += Number(m[k] || 0)
-      monthAmountAgg[k] += Number(m[k] || 0)
+      monthAgg[k] += Number(wk.agg[k] || 0)
+    })
+  })
+
+  // Build HTML with collapsible weeks
+  let hoursHTML = ''
+  let amountsHTML = ''
+
+  weekGroups.forEach((week, weekIdx) => {
+    const weekStart = parseISODateLocal(week.weekKey)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+    const weekLabel = `${weekStart.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}`
+    const weekId = `payroll-week-${monthFilter}-${weekIdx}`
+
+    // Week total cells
+    const weekTotalCells = PAYROLL_BUCKET_KEYS.map(
+      (k) => `<td><strong>${fmtHours(week.agg[k])}</strong></td>`,
+    ).join('')
+    const weekAmountCells = PAYROLL_BUCKET_KEYS.map(
+      (k) => `<td><strong>${fmtAmount(bucketAmount(week.agg[k], k, baseHourlyRate))}</strong></td>`,
+    ).join('')
+
+    // Build week rows (hours)
+    let weekBodyHours = ''
+    week.days.forEach(({ day, metrics }) => {
+      const t = classifyDayType(day, employeeId)
+      const badge = `<span style="display:inline-block;padding:1px 5px;border-radius:999px;background:${t.color};color:${t.fg};font-weight:700;" title="${t.text}">${t.code}</span>`
+      const timeText = dayTimeText(day, employeeId)
+      const bucketCells = PAYROLL_BUCKET_KEYS.map((k) => `<td>${fmtHours(metrics[k])}</td>`).join('')
+      weekBodyHours += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${bucketCells}</tr>`
     })
 
-    const t = classifyDayType(day, employeeId)
-    const badge = `<span style="display:inline-block;padding:1px 5px;border-radius:999px;background:${t.color};color:${t.fg};font-weight:700;" title="${t.text}">${t.code}</span>`
-    const timeText = dayTimeText(day, employeeId)
-    const bucketCells = PAYROLL_BUCKET_KEYS.map((k) => `<td>${fmtHours(m[k])}</td>`).join('')
-    body += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${bucketCells}</tr>`
-    const amountCells = PAYROLL_BUCKET_KEYS.map(
-      (k) => `<td>${fmtAmount(bucketAmount(m[k], k, baseHourlyRate))}</td>`,
-    ).join('')
-    amountBody += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${amountCells}</tr>`
+    // Build week rows (amounts)
+    let weekBodyAmounts = ''
+    week.days.forEach(({ day, metrics }) => {
+      const t = classifyDayType(day, employeeId)
+      const badge = `<span style="display:inline-block;padding:1px 5px;border-radius:999px;background:${t.color};color:${t.fg};font-weight:700;" title="${t.text}">${t.code}</span>`
+      const timeText = dayTimeText(day, employeeId)
+      const amountCells = PAYROLL_BUCKET_KEYS.map(
+        (k) => `<td>${fmtAmount(bucketAmount(metrics[k], k, baseHourlyRate))}</td>`,
+      ).join('')
+      weekBodyAmounts += `<tr><td>${formatPayrollDayLabel(day)}</td><td style="text-align:left;">${badge}</td><td style="text-align:left;">${timeText}</td>${amountCells}</tr>`
+    })
 
-    if (idx === entries.length - 1) {
-      const lastWeekStart = parseISODateLocal(currentWeek)
-      const lastWeekEnd = new Date(lastWeekStart)
-      lastWeekEnd.setDate(lastWeekEnd.getDate() + 6)
-      body += subtotalRow(
-        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`,
-        weekAgg,
-      )
-      amountBody += amountSubtotalRow(
-        `<strong>Σύνολο εβδομάδας</strong> <small style="margin-left:8px;">${lastWeekStart.toLocaleDateString('el-GR')} - ${lastWeekEnd.toLocaleDateString('el-GR')}</small>`,
-        weekAmountAgg,
-        baseHourlyRate,
-      )
-    }
+    hoursHTML += `
+      <tr class="payroll-week-header" onclick="togglePayrollWeek('${weekId}-hours')">
+        <td colspan="3" style="cursor: pointer; user-select: none;">
+          <span class="payroll-week-toggle" id="${weekId}-hours-toggle">▶</span>
+          <strong>Εβδομάδα ${weekIdx + 1}</strong> <small>${weekLabel}</small>
+        </td>
+        ${weekTotalCells}
+      </tr>
+      <tbody id="${weekId}-hours" class="payroll-week-body" style="display:none;">
+        ${weekBodyHours}
+      </tbody>
+    `
+
+    amountsHTML += `
+      <tr class="payroll-week-header" onclick="togglePayrollWeek('${weekId}-amounts')">
+        <td colspan="3" style="cursor: pointer; user-select: none;">
+          <span class="payroll-week-toggle" id="${weekId}-amounts-toggle">▶</span>
+          <strong>Εβδομάδα ${weekIdx + 1}</strong> <small>${weekLabel}</small>
+        </td>
+        ${weekAmountCells}
+      </tr>
+      <tbody id="${weekId}-amounts" class="payroll-week-body" style="display:none;">
+        ${weekBodyAmounts}
+      </tbody>
+    `
   })
 
   const catHead1 = PAYROLL_CATEGORIES.map((c) => `<th colspan="6">${c.label}</th>`).join('')
@@ -533,7 +591,7 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
             <tr>${catHead2}</tr>
             <tr>${catHead3}</tr>
           </thead>
-          <tbody>${body}</tbody>
+          ${hoursHTML}
           <tfoot>
             ${subtotalRow('<strong>Σύνολα μήνα</strong>', monthAgg)}
           </tfoot>
@@ -556,9 +614,9 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
             <tr>${catHead2}</tr>
             <tr>${catHead3}</tr>
           </thead>
-          <tbody>${amountBody}</tbody>
+          ${amountsHTML}
           <tfoot>
-            ${amountSubtotalRow('<strong>Σύνολα μήνα</strong>', monthAmountAgg, baseHourlyRate)}
+            ${amountSubtotalRow('<strong>Σύνολα μήνα</strong>', monthAgg, baseHourlyRate)}
           </tfoot>
         </table>
       </div>

@@ -983,6 +983,35 @@ h1 {
   color: #4a5cc7;
 }
 
+.payroll-week-header {
+  background: #e8ecf7 !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.payroll-week-header:hover {
+  background: #dde3f0 !important;
+}
+
+.payroll-week-header td {
+  padding: 6px 8px !important;
+  font-weight: 600;
+  color: #3b4cca;
+}
+
+.payroll-week-toggle {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  margin-right: 6px;
+  font-size: 0.9em;
+  transition: transform 0.2s;
+}
+
+.payroll-week-body {
+  /* Daily rows within week */
+}
+
 .payroll-tabs {
   display: flex;
   gap: 8px;
