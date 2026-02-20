@@ -31,11 +31,10 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('editEmployeeId').value = employeeId
     document.getElementById('employeeNick').value = emp.nickName || ''
     document.getElementById('employeeVat').value = emp.vat || ''
-    document.getElementById('employeeNick').value = emp.nickName || ''
     document.getElementById('employeePayType').value = emp.payType || 'hourly'
-    document.getElementById('employeeMinHours').value = getWorkingHours(emp, 40)
-    document.getElementById('employeeMaxHours').value = getWorkingHours(emp, 40)
     document.getElementById('employeeHourlyRate').value = emp.hourlyRate || 10
+    document.getElementById('employeeHourlyWeekHours').value = emp.weekWorkingHours || 40
+    document.getElementById('employeeHourlyWeekDays').value = emp.weekWorkingDays || 5
     document.getElementById('employeeMonthlySalary').value = emp.monthlySalary || 1000
     document.getElementById('employeeMonthlyWeekHours').value = emp.weekWorkingHours || 40
     document.getElementById('employeeMonthlyWeekDays').value = emp.weekWorkingDays || 5
@@ -52,11 +51,10 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('editEmployeeId').value = ''
     document.getElementById('employeeNick').value = ''
     document.getElementById('employeeVat').value = ''
-    document.getElementById('employeeNick').value = ''
     document.getElementById('employeePayType').value = 'hourly'
-    document.getElementById('employeeMinHours').value = getWorkingHours(empDefaults, 40)
-    document.getElementById('employeeMaxHours').value = getWorkingHours(empDefaults, 40)
     document.getElementById('employeeHourlyRate').value = empDefaults.hourlyRate || 10
+    document.getElementById('employeeHourlyWeekHours').value = 40
+    document.getElementById('employeeHourlyWeekDays').value = 5
     document.getElementById('employeeMonthlySalary').value = 1000
     document.getElementById('employeeMonthlyWeekHours').value = 40
     document.getElementById('employeeMonthlyWeekDays').value = 5
@@ -73,11 +71,12 @@ function saveEmployee() {
   const vat = document.getElementById('employeeVat').value.trim()
   const nickName = document.getElementById('employeeNick').value.trim()
   const payType = document.getElementById('employeePayType').value || 'hourly'
-  const workingHours = parseInt(document.getElementById('employeeMinHours').value) || 40
   const hourlyRate = parseFloat(document.getElementById('employeeHourlyRate').value) || 10
+  const hourlyWeekHours = parseFloat(document.getElementById('employeeHourlyWeekHours').value) || 40
+  const hourlyWeekDays = parseInt(document.getElementById('employeeHourlyWeekDays').value) || 5
   const monthlySalary = parseFloat(document.getElementById('employeeMonthlySalary').value) || 0
-  const weekWorkingHours = parseFloat(document.getElementById('employeeMonthlyWeekHours').value) || 40
-  const weekWorkingDays = parseInt(document.getElementById('employeeMonthlyWeekDays').value) || 5
+  const monthlyWeekHours = parseFloat(document.getElementById('employeeMonthlyWeekHours').value) || 40
+  const monthlyWeekDays = parseInt(document.getElementById('employeeMonthlyWeekDays').value) || 5
   const editId = document.getElementById('editEmployeeId').value
 
   const restDays = []
@@ -108,9 +107,15 @@ function saveEmployee() {
     return
   }
 
-  // single working-hours field: no min/max validation needed
-  if (payType === 'monthly' && (weekWorkingDays < 1 || weekWorkingDays > 6)) {
+  // Validation for monthly employees
+  if (payType === 'monthly' && (monthlyWeekDays < 1 || monthlyWeekDays > 6)) {
     alert('Monthly employee working days/week must be between 1 and 6')
+    return
+  }
+
+  // Validation for hourly employees
+  if (payType === 'hourly' && hourlyRate <= 0) {
+    alert('Hourly rate must be greater than 0')
     return
   }
 
@@ -145,18 +150,20 @@ function saveEmployee() {
     emp.vat = vat
     emp.nickName = nickName
     emp.payType = payType
-    emp.weekWorkingHours = payType === 'monthly' ? weekWorkingHours : workingHours
+    emp.hourlyRate = hourlyRate
+    emp.weekWorkingHours = payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours
+    emp.weekWorkingDays = payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays
     emp.monthlySalary = monthlySalary
-    emp.weekWorkingDays = weekWorkingDays
     emp.defaultRestDays = restDays
   } else {
     data.employees.push({
       vat,
       nickName: nickName,
       payType,
-      weekWorkingHours: payType === 'monthly' ? weekWorkingHours : workingHours,
+      hourlyRate,
+      weekWorkingHours: payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours,
+      weekWorkingDays: payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays,
       monthlySalary,
-      weekWorkingDays,
       defaultRestDays: restDays,
     })
   }

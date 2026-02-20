@@ -243,10 +243,12 @@ function bucketPayMultiplier(bucketKey) {
   if (cat === 'within') {
     const nightAdd = isNight ? (PR.withinNightAdd ?? 0.25) : 0
     const holidayAdd = isHolidayOrSunday ? (PR.withinHolidayAdd ?? 0.75) : 0
-    // Official holiday (incl. when it falls on Sunday): base hour + 75% = ×1.75
-    // Plain Sunday within contracted hours: +75% extra only (base in salary)
-    const holidayBase = isOfficialHoliday && PR.holidayHoursFullyPaid !== false ? 1 : 0
-    return nightAdd + holidayAdd + holidayBase
+    // Base multiplier: 1.0 for regular work or official holidays
+    // (official holidays fully paid: 1.0 base + 0.75 premium = 1.75)
+    // Plain Sunday: premium only (base already in salary), so 0.75 extra
+    const baseMultiplier =
+      (isOfficialHoliday && PR.holidayHoursFullyPaid !== false) || !isHolidayOrSunday ? 1 : 0
+    return baseMultiplier + nightAdd + holidayAdd
   }
 
   // Overtime/additional categories: both official holidays and Sundays get ×1.75
@@ -478,7 +480,12 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
     }
   })
 
-  const selectedEmp = (data.employees || []).find((e) => String(e.vat) === String(employeeId || ''))
+  // Find employee by VAT, with fallback to first employee if not found
+  let selectedEmp = (data.employees || []).find((e) => String(e.vat) === String(employeeId || ''))
+  if (!selectedEmp && employeeId && data.employees.length > 0) {
+    selectedEmp = data.employees[0]
+  }
+
   const isMonthly = selectedEmp?.payType === 'monthly'
   const weekHoursCfg = Number(selectedEmp?.weekWorkingHours || 40)
   const monthlySalary = Number(selectedEmp?.monthlySalary || 0)
@@ -626,7 +633,16 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
 
 function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const emp = (data.employees || []).find((e) => String(e.vat) === String(employeeId || ''))
-  if (!emp || !monthFilter) return null
+  if (!emp || !monthFilter) {
+    // Fallback: return null but log for debugging
+    console.warn(
+      'Employee not found for payroll:',
+      employeeId,
+      'in',
+      (data.employees || []).map((e) => e.vat),
+    )
+    return null
+  }
 
   const weekHoursCfg = Number(emp.weekWorkingHours || 40)
   const monthlySalary = Number(emp.monthlySalary || 0)
@@ -650,13 +666,16 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const nonZeroHours = {}
   const nonZeroAmounts = {}
 
+  // First pass: collect all amounts
   PAYROLL_BUCKET_KEYS.forEach((k) => {
     const h = Math.round(monthBuckets[k] * 100) / 100
     if (Math.abs(h) > 1e-9) nonZeroHours[k] = h
-    const amt = bucketAmount(h, k, baseHourlyRate)
-    const a = Math.round(amt * 100) / 100
-    if (Math.abs(a) > 1e-9) nonZeroAmounts[k] = a
-    extraTotal += a
+    if (!k.startsWith('within_')) {
+      const amt = bucketAmount(h, k, baseHourlyRate)
+      const a = Math.round(amt * 100) / 100
+      if (Math.abs(a) > 1e-9) nonZeroAmounts[k] = a
+      extraTotal += a
+    }
   })
 
   let salaryTotal = 0
@@ -668,6 +687,22 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
     const absDays = countMonthlyAbsenceDaysInMonth(emp.vat, monthFilter, _wd)
     const deduction = absDays * _dailyHoursDed * _hourlyRateDed
     salaryTotal = Math.max(0, monthlySalary - deduction)
+  } else {
+    // Hourly employees: salaryTotal = within hours (work day + work night) × hourly rate
+    const withinWorkDayHours = Math.round(monthBuckets['within_work_day'] * 100) / 100
+    const withinWorkNightHours = Math.round(monthBuckets['within_work_night'] * 100) / 100
+
+    // Calculate salary from within hours with their appropriate multipliers
+    const withinDayAmount = bucketAmount(withinWorkDayHours, 'within_work_day', baseHourlyRate)
+    const withinNightAmount = bucketAmount(withinWorkNightHours, 'within_work_night', baseHourlyRate)
+    salaryTotal = Math.round((withinDayAmount + withinNightAmount) * 100) / 100
+
+    // Record within amounts in hours map
+    if (withinWorkDayHours > 1e-9) nonZeroHours['within_work_day'] = withinWorkDayHours
+    if (withinWorkNightHours > 1e-9) nonZeroHours['within_work_night'] = withinWorkNightHours
+    if (withinDayAmount > 1e-9) nonZeroAmounts['within_work_day'] = Math.round(withinDayAmount * 100) / 100
+    if (withinNightAmount > 1e-9)
+      nonZeroAmounts['within_work_night'] = Math.round(withinNightAmount * 100) / 100
   }
 
   const grandTotal = salaryTotal + extraTotal
