@@ -26,7 +26,10 @@ function renderTimeline() {
       categoryByTime[timeStr] = slice.category
     })
 
-    // Walk through shift in 15-min steps, grouping consecutive same (category + day/night)
+    // Get colors from config
+    const colors = window.TIMELINE_COLORS || {}
+
+    // Walk through shift in 15-min steps, grouping consecutive same category
     const blocks = []
     let h = startH
     const STEP = 0.25 // 15 minutes
@@ -38,33 +41,25 @@ function renderTimeline() {
       const timeKey = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
       let category = categoryByTime[timeKey] || 'within'
 
-      // Check if night
-      const isNight = hh % 24 >= 22 || hh % 24 < 6
-
-      // Extend block while category and day/night don't change
+      // Extend block while category doesn't change
       let blockEnd = h + STEP
       while (blockEnd < endH) {
         const nextHh = Math.floor(blockEnd)
         const nextMm = Math.round((blockEnd - nextHh) * 60)
         const nextTimeKey = `${String(nextHh).padStart(2, '0')}:${String(nextMm).padStart(2, '0')}`
         const nextCategory = categoryByTime[nextTimeKey] || 'within'
-        const nextIsNight = nextHh % 24 >= 22 || nextHh % 24 < 6
 
-        if (nextCategory !== category || nextIsNight !== isNight) break
+        if (nextCategory !== category) break
         blockEnd += STEP
       }
       blockEnd = Math.min(blockEnd, endH)
 
-      let segClass = `seg-${category}`
-      if (isHoliday && isNight) segClass += ' seg-holiday-night'
-      else if (isHoliday) segClass += ' seg-holiday'
-      else if (isNight) segClass += ' seg-night'
-
       const leftPct = ((h - startH) / totalDuration) * 100
       const widthPct = ((blockEnd - h) / totalDuration) * 100
+      const bgColor = colors[category] || colors.within || 'linear-gradient(135deg, #4caf50, #388e3c)'
 
       blocks.push(
-        `<div class="timeline-segment ${segClass}" style="left:${leftPct}%;width:${widthPct}%"></div>`,
+        `<div class="timeline-segment seg-${category}" style="left:${leftPct}%;width:${widthPct}%;background:${bgColor}"></div>`,
       )
       h = blockEnd
     }
@@ -392,6 +387,49 @@ function handleShiftBarMouseUp(e) {
       if (gap < 180) {
         alert('Το κενό μεταξύ των 2 βαρδιών πρέπει να είναι τουλάχιστον 3 ώρες')
       } else {
+        // Validate maximum shift hours
+        const maxShiftHours = window.MAX_SHIFT_HOURS || 13
+        const duration1 =
+          (toMinutes(next.end) -
+            toMinutes(next.start) +
+            (toMinutes(next.end) < toMinutes(next.start) ? 1440 : 0)) /
+          60
+        const duration2 =
+          (toMinutes(next.end2) -
+            toMinutes(next.start2) +
+            (toMinutes(next.end2) < toMinutes(next.start2) ? 1440 : 0)) /
+          60
+        const totalShiftHours = duration1 + duration2
+        if (totalShiftHours > maxShiftHours) {
+          alert(
+            `Οι ώρες βάρδιας δεν μπορούν να υπερβαίνουν τις ${maxShiftHours} ώρες (συνολικά: ${totalShiftHours.toFixed(2)}h)`,
+          )
+        } else {
+          const restChk = validate11hRestBetweenDays(employeeId, dateStr, next)
+          if (!restChk.ok) alert(restChk.msg)
+          else {
+            const weeklyRestChk = validate24hRestInAny7Days(employeeId, dateStr, next)
+            if (!weeklyRestChk.ok) alert(weeklyRestChk.msg)
+            else {
+              data.shifts[key] = next
+              saveData()
+            }
+          }
+        }
+      }
+    } else {
+      // Validate maximum shift hours for single shift
+      const maxShiftHours = window.MAX_SHIFT_HOURS || 13
+      const duration =
+        (toMinutes(next.end) -
+          toMinutes(next.start) +
+          (toMinutes(next.end) < toMinutes(next.start) ? 1440 : 0)) /
+        60
+      if (duration > maxShiftHours) {
+        alert(
+          `Οι ώρες βάρδιας δεν μπορούν να υπερβαίνουν τις ${maxShiftHours} ώρες (συνολικά: ${duration.toFixed(2)}h)`,
+        )
+      } else {
         const restChk = validate11hRestBetweenDays(employeeId, dateStr, next)
         if (!restChk.ok) alert(restChk.msg)
         else {
@@ -401,17 +439,6 @@ function handleShiftBarMouseUp(e) {
             data.shifts[key] = next
             saveData()
           }
-        }
-      }
-    } else {
-      const restChk = validate11hRestBetweenDays(employeeId, dateStr, next)
-      if (!restChk.ok) alert(restChk.msg)
-      else {
-        const weeklyRestChk = validate24hRestInAny7Days(employeeId, dateStr, next)
-        if (!weeklyRestChk.ok) alert(weeklyRestChk.msg)
-        else {
-          data.shifts[key] = next
-          saveData()
         }
       }
     }

@@ -258,6 +258,23 @@ function saveShift() {
       }
     }
 
+    // Validate maximum shift hours (including split shifts)
+    const maxShiftHours = window.MAX_SHIFT_HOURS || 13
+    const duration1 =
+      (toMinutes(end) - toMinutes(start) + (toMinutes(end) < toMinutes(start) ? 1440 : 0)) / 60
+    let totalShiftHours = duration1
+    if (has2) {
+      const duration2 =
+        (toMinutes(end2) - toMinutes(start2) + (toMinutes(end2) < toMinutes(start2) ? 1440 : 0)) / 60
+      totalShiftHours += duration2
+    }
+    if (totalShiftHours > maxShiftHours) {
+      alert(
+        `Οι ώρες βάρδιας δεν μπορούν να υπερβαίνουν τις ${maxShiftHours} ώρες (συνολικά: ${totalShiftHours.toFixed(2)}h)`,
+      )
+      return
+    }
+
     const date = new Date(dateStr)
     const dayOfWeek = date.getDay()
     const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1
@@ -330,6 +347,23 @@ function saveMultipleShifts(shiftType) {
         alert('Το κενό μεταξύ των 2 βαρδιών πρέπει να είναι τουλάχιστον 3 ώρες')
         return
       }
+    }
+
+    // Validate maximum shift hours (including split shifts)
+    const maxShiftHours = window.MAX_SHIFT_HOURS || 13
+    const duration1 =
+      (toMinutes(end) - toMinutes(start) + (toMinutes(end) < toMinutes(start) ? 1440 : 0)) / 60
+    let totalShiftHours = duration1
+    if (has2) {
+      const duration2 =
+        (toMinutes(end2) - toMinutes(start2) + (toMinutes(end2) < toMinutes(start2) ? 1440 : 0)) / 60
+      totalShiftHours += duration2
+    }
+    if (totalShiftHours > maxShiftHours) {
+      alert(
+        `Οι ώρες βάρδιας δεν μπορούν να υπερβαίνουν τις ${maxShiftHours} ώρες (συνολικά: ${totalShiftHours.toFixed(2)}h)`,
+      )
+      return
     }
 
     const businessHours = getBusinessHoursForWeek()
@@ -416,4 +450,3 @@ function clearShift() {
   closeModal('shiftModal')
   renderAll()
 }
-
