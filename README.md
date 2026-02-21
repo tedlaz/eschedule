@@ -12,6 +12,7 @@ A **client-side only** Greek work scheduling app. Handles weekly schedules, shif
 
 - **Weekly schedule grid** — per-employee shifts, absences and rest days across a 7-day week
 - **Greek public holidays** — auto-detected via Easter algorithm (`argies.js`); custom holiday names per date
+- **Minimum wage enforcement** — statutory monthly salary (default €880) and hourly rate (default €5.86) are enforced at employee save time, with prorating for part-time contracts and automatic triennial (τριετία) bonuses (+10 % per 3-year period, up to +30 %)
 - **Payroll summary** — full Greek labour-law rules: night premium (+25 %), holiday pay (×1.75), Sunday premium (+75 %), overtime tiers (Πρόσθετη / Υπερεργασία / Υπερωρία / Παράνομη)
 - **Monthly payroll export** — per-employee JSON with all bucket hours and amounts
 - **Timeline modal** — visual shift bar per employee for a given day, with drag-to-adjust
@@ -62,6 +63,37 @@ python -m http.server
 | `selection.js`      | Multi-cell selection                                    |
 | `card-diff.js`      | Time-card diff tool                                     |
 | `app.js`            | App bootstrap (`DOMContentLoaded` init)                 |
+
+## Employee fields
+
+| Field                         | Description                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| ΑΦΜ                           | 9-digit tax ID (unique key)                                                                                               |
+| Nickname                      | Short label shown in the schedule grid                                                                                    |
+| Τύπος αμοιβής                 | `hourly` (ωρομίσθιος) or `monthly` (μηνιαίος)                                                                             |
+| Τριετίες                      | Number of completed 3-year employment periods (0–3). Each period adds **+10 %** to the statutory minimum (max **+30 %**). |
+| €/Ώρα or Μηνιαίος μισθός      | Actual pay; must be ≥ the effective minimum (base × triennial bonus, prorated for part-time hours)                        |
+| Εβδομαδιαίες ώρες εργασίας    | Contracted weekly hours (used for overtime thresholds and prorating)                                                      |
+| Εβδομαδιαίες εργάσιμες ημέρες | Contracted working days per week                                                                                          |
+| Ημέρες Ρεπό                   | Default rest days (2); can be overridden per week                                                                         |
+
+### Minimum wage calculation
+
+```
+effective_min_monthly = baseMinMonthlySalary × (1 + triennia × 0.1) × (weeklyHours / 40)
+effective_min_hourly  = baseMinHourlyRate    × (1 + triennia × 0.1)
+```
+
+The baseline values (`baseMinMonthlySalary` = €880, `baseMinHourlyRate` = €5.86) are configurable at runtime via the **⚙️🔧 Ρυθμίσεις → Προεπιλογές** tab and are persisted in the app state.
+
+## Settings modal (⚙️🔧)
+
+The single **⚙️🔧** toolbar button opens a two-tab modal:
+
+| Tab                     | Contents                                                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **⚙️ Ωράριο Εβδομάδας** | Current-week business hours and holiday flags (🎉) for each day. Changes affect only the selected week.                                                   |
+| **🔧 Προεπιλογές**      | Statutory minimum monthly salary and hourly rate (baseline for minimum-wage checks), and the default weekly business-hours template applied to new weeks. |
 
 ## Payroll rules
 

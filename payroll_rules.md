@@ -149,7 +149,48 @@ Absence deductions for monthly employees: each unpaid absence day deducts `salar
 
 ---
 
-## 6) Practical Implementation Notes
+## 6) Minimum Wage & Triennial Increments
+
+### 6.1 Statutory baseline
+
+The Greek national minimum for a full-time contract (5 days / 40 h per week):
+
+| Baseline               | Default value | Config key (`payroll.js`) |
+| ---------------------- | ------------- | ------------------------- |
+| Minimum monthly salary | **€880**      | `baseMinMonthlySalary`    |
+| Minimum hourly rate    | **€5.86**     | `baseMinHourlyRate`       |
+
+Both values can be updated at runtime without touching code, through the **⚙️🔧 Ρυθμίσεις → Προεπιλογές** tab. Changes are persisted in the app state (localStorage / IndexedDB) and restored on next load.
+
+### 6.2 Triennial increments (τριετίες)
+
+Every completed 3-year employment period adds **+10 %** to the statutory baseline, up to a maximum of **3 periods (+30 %)**:
+
+| Τριετίες | Bonus | Multiplier |
+| -------- | ----- | ---------- |
+| 0        | 0 %   | ×1.00      |
+| 1        | +10 % | ×1.10      |
+| 2        | +20 % | ×1.20      |
+| 3        | +30 % | ×1.30      |
+
+The number of triennia is set per employee in the employee form and stored on the employee record (`emp.triennia`).
+
+### 6.3 Part-time prorating
+
+For employees with fewer than 40 contracted hours per week, the monthly minimum is prorated proportionally:
+
+```
+effective_min_monthly = baseMinMonthlySalary × (1 + triennia × 0.1) × (weeklyHours / 40)
+effective_min_hourly  = baseMinHourlyRate    × (1 + triennia × 0.1)
+```
+
+### 6.4 Enforcement
+
+The application **blocks saving** an employee record if the entered salary or hourly rate falls below the effective minimum. Live hints below the salary/rate fields show the current minimum in real time (turning red when the value is below the threshold).
+
+---
+
+## 7) Practical Implementation Notes
 
 - 15-minute slices are used for accurate cross-midnight and mixed-condition shifts.
 - A second shift on the same day may have a different type (`ΕΡΓ`/`ΤΗΛ`) and is processed independently.
@@ -159,7 +200,7 @@ Absence deductions for monthly employees: each unpaid absence day deducts `salar
 
 ---
 
-## 7) Confirmed Business Decisions (from user)
+## 8) Confirmed Business Decisions (from user)
 
 1. 10th and 11th daily hours are overtime `YP` +40%.
 2. Weekly 40→45 hours are `YE` +20%.
