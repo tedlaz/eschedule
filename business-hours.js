@@ -5,13 +5,12 @@ function getHolidayName(dateStr) {
   return ''
 }
 
-// Business Hours Modal (per week)
-function openBusinessHoursModal() {
-  const modal = document.getElementById('businessHoursModal')
+// Settings Modal — combines Business Hours (week) + Defaults in two tabs
+function openSettingsModal(tab) {
+  // Build week business hours form
   const form = document.getElementById('businessHoursForm')
   const businessHours = getBusinessHoursForWeek()
   const holidays = getHolidaysForWeek()
-
   let html = ''
   DAYS.forEach((day, i) => {
     const bh = businessHours[i]
@@ -20,23 +19,59 @@ function openBusinessHoursModal() {
     dayDate.setDate(dayDate.getDate() + i)
     const dateStr = formatDate(dayDate)
     const holidayName = getHolidayName(dateStr)
-    html += `
-      <div class="form-group" style="border-bottom: 1px solid #eee; padding-bottom: 15px;">
-        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-          <label style="min-width: 100px; margin-bottom: 0;">${day}</label>
-          <div class="checkbox-item">
-            <input type="checkbox" id="holiday${i}" ${isHoliday ? 'checked' : ''} onchange="toggleHolidayNameInput(${i})">
-            <label for="holiday${i}">Αργία</label>
-          </div>
-          <input type="text" id="holidayName${i}" value="${holidayName}" placeholder="Όνομα αργίας" style="width:160px; display:${isHoliday ? 'block' : 'none'}">
-          <input type="text" id="bhOpen${i}" value="${bh.open}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
-          <span>to</span>
-          <input type="text" id="bhClose${i}" value="${bh.close}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
-        </div>
-      </div>`
+    html += `<div style="display:grid; grid-template-columns:88px 82px 1fr 56px 10px 56px; align-items:center; gap:2px 6px; padding:3px 0; border-bottom:1px solid #f0f0f0;">
+      <label style="font-size:0.87em; font-weight:600; margin:0;">${day}</label>
+      <label style="font-size:0.81em; display:flex; align-items:center; gap:3px; margin:0; cursor:pointer; white-space:nowrap;">
+        <input type="checkbox" id="holiday${i}" ${isHoliday ? 'checked' : ''} onchange="toggleHolidayNameInput(${i})"> 🎉 Αργία
+      </label>
+      <input type="text" id="holidayName${i}" value="${holidayName}" placeholder="Όνομα αργίας" style="font-size:0.81em; display:${isHoliday ? '' : 'none'}; padding:2px 4px; min-width:0;">
+      <input type="text" id="bhOpen${i}" value="${bh.open}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h" style="padding:3px; text-align:center; width:100%;">
+      <span style="text-align:center; color:#bbb; font-size:0.85em;">—</span>
+      <input type="text" id="bhClose${i}" value="${bh.close}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h" style="padding:3px; text-align:center; width:100%;">
+    </div>`
   })
   form.innerHTML = html
-  modal.classList.add('active')
+
+  // Build defaults form
+  const PR = window.PAYROLL_RULES || {}
+  const msSalEl = document.getElementById('defBaseMinMonthlySalary')
+  const msRateEl = document.getElementById('defBaseMinHourlyRate')
+  if (msSalEl) msSalEl.value = Number(PR.baseMinMonthlySalary ?? 880).toFixed(2)
+  if (msRateEl) msRateEl.value = Number(PR.baseMinHourlyRate ?? 5.86).toFixed(2)
+
+  const defForm = document.getElementById('defaultBusinessHoursForm')
+  let defHtml = ''
+  DAYS.forEach((day, i) => {
+    const bh = data.defaultBusinessHours[i]
+    defHtml += `<div style="display:grid; grid-template-columns:88px 56px 10px 56px; align-items:center; gap:2px 6px; padding:3px 0; border-bottom:1px solid #f0f0f0;">
+      <label style="font-size:0.87em; font-weight:600; margin:0;">${day}</label>
+      <input type="text" id="defBhOpen${i}" value="${bh.open}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h" style="padding:3px; text-align:center; width:100%;">
+      <span style="text-align:center; color:#bbb; font-size:0.85em;">—</span>
+      <input type="text" id="defBhClose${i}" value="${bh.close}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h" style="padding:3px; text-align:center; width:100%;">
+    </div>`
+  })
+  defForm.innerHTML = defHtml
+
+  switchSettingsTab(tab || 'week')
+  document.getElementById('settingsModal').classList.add('active')
+}
+
+function switchSettingsTab(tab) {
+  const isWeek = tab === 'week'
+  document.getElementById('settingsTabWeek').style.display = isWeek ? '' : 'none'
+  document.getElementById('settingsTabDefaults').style.display = isWeek ? 'none' : ''
+  const wBtn = document.getElementById('settingsTabBtnWeek')
+  wBtn.style.borderBottomColor = isWeek ? '#667eea' : 'transparent'
+  wBtn.style.fontWeight = isWeek ? '700' : '400'
+  wBtn.style.color = isWeek ? '#667eea' : '#64748b'
+  const dBtn = document.getElementById('settingsTabBtnDefaults')
+  dBtn.style.borderBottomColor = isWeek ? 'transparent' : '#667eea'
+  dBtn.style.fontWeight = isWeek ? '400' : '700'
+  dBtn.style.color = isWeek ? '#64748b' : '#667eea'
+}
+
+function openBusinessHoursModal() {
+  openSettingsModal('week')
 }
 
 function toggleHolidayNameInput(i) {
@@ -105,39 +140,13 @@ function saveBusinessHours() {
   data.weekBusinessHours[weekKey] = weekHours
   data.weekHolidays[weekKey] = holidays
   saveData()
-  closeModal('businessHoursModal')
+  closeModal('settingsModal')
   renderAll()
 }
 
-// Defaults Modal
+// Defaults Modal — now part of combined settings modal
 function openDefaultsModal() {
-  const modal = document.getElementById('defaultsModal')
-  const form = document.getElementById('defaultBusinessHoursForm')
-
-  // Populate base minimum salary / rate fields from live PAYROLL_RULES
-  const PR = window.PAYROLL_RULES || {}
-  const msSalEl = document.getElementById('defBaseMinMonthlySalary')
-  const msRateEl = document.getElementById('defBaseMinHourlyRate')
-  if (msSalEl) msSalEl.value = Number(PR.baseMinMonthlySalary ?? 880).toFixed(2)
-  if (msRateEl) msRateEl.value = Number(PR.baseMinHourlyRate ?? 5.86).toFixed(2)
-
-  // Populate default business hours form
-  let html = ''
-  DAYS.forEach((day, i) => {
-    const bh = data.defaultBusinessHours[i]
-    html += `
-      <div class="form-group" style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
-        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-          <label style="min-width: 100px; margin-bottom: 0;">${day}</label>
-          <input type="text" id="defBhOpen${i}" value="${bh.open}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
-          <span>to</span>
-          <input type="text" id="defBhClose${i}" value="${bh.close}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input-24h">
-        </div>
-      </div>`
-  })
-  form.innerHTML = html
-
-  modal.classList.add('active')
+  openSettingsModal('defaults')
 }
 
 function toggleDefaultBusinessDay(dayIndex) {
@@ -262,7 +271,7 @@ function saveDefaults() {
   }
 
   saveData()
-  closeModal('defaultsModal')
+  closeModal('settingsModal')
   alert('Defaults saved successfully!')
 }
 

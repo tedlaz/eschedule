@@ -19,16 +19,15 @@
 
     <div class="controls">
       <button class="btn-primary" onclick="openEmployeeModal()" title="Νέος εργαζόμενος">+ Εργ</button>
-      <button class="btn-secondary" onclick="openBusinessHoursModal()" title="Ωράριο Επιχείρησης">⚙️</button>
-      <button class="btn-secondary" onclick="openDefaultsModal()" title="Προεπιλογές">🔧</button>
+      <button class="btn-secondary" onclick="openSettingsModal('week')" title="Ρυθμίσεις">⚙️🔧</button>
       <button class="btn-secondary" onclick="openWorkRestModal()" title="Εργασία/Ανάπαυση">📊</button>
       <button class="btn-secondary" onclick="openPayrollModal()" title="Μισθοδοσία">💶</button>
+      <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
       <button class="btn-secondary" onclick="openCardDiffModal()" title="Κάρτα εργαζομένου vs πρόγραμμα">🪪Δ</button>
       <button class="btn-secondary" id="multiSelectBtn" onclick="toggleMultiSelectMode()"
         title="Ενεργοποίηση πολλαπλής επιλογής">☐</button>
-      <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
-      <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">📤</button>
       <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή αρχείου">📥</button>
+      <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">📤</button>
       <button class="btn-danger" onclick="resetAllData()" title="Καθαρισμός όλων των δεδομένων">✕</button>
 
       <div class="selection-actions" id="selectionActions">
@@ -199,22 +198,7 @@
     </div>
   </div>
 
-  <!-- Business Hours Modal (per week) -->
-  <div class="modal" id="businessHoursModal">
-    <div class="modal-content wide">
-      <h2>Ωρες εργασίας Επιχείρησης</h2>
-      <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Οι αλλαγές επηρεάζουν μόνο αυτήν την εβδομάδα.
-        Ορίστε επίσημες αργίες (🎉) για προσαύξηση +75%.</p>
-      <div id="businessHoursForm">
-        <!-- Populated by JavaScript -->
-      </div>
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="copyFromDefaultHours()">Reset to Default</button>
-        <button class="btn-secondary" onclick="closeModal('businessHoursModal')">Cancel</button>
-        <button class="btn-primary" onclick="saveBusinessHours()">Save</button>
-      </div>
-    </div>
-  </div>
+  <!-- businessHoursModal merged into settingsModal -->
 
   <!-- Rest Days Modal (per week per employee) -->
   <div class="modal" id="restDaysModal">
@@ -316,35 +300,52 @@
     </div>
   </div>
 
-  <!-- Defaults Settings Modal -->
-  <div class="modal" id="defaultsModal">
-    <div class="modal-content wide">
-      <h2>🔧 Προεπιλογές</h2>
-      <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Αυτές οι ρυθμίσεις εφαρμόζονται σε νέες εβδομάδες
-        και νέους εργαζομένους.</p>
+  <!-- Settings Modal: Ωράριο Εβδομάδας + Προεπιλογές (tabbed) -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content wide" style="padding:16px 20px;">
+      <h2 style="margin:0 0 8px; font-size:1.1em;">⚙️ Ρυθμίσεις</h2>
+      <div style="display:flex; gap:0; border-bottom:2px solid #e2e8f0; margin-bottom:10px;">
+        <button id="settingsTabBtnWeek" onclick="switchSettingsTab('week')"
+          style="padding:5px 14px; border:none; border-bottom:2px solid #667eea; margin-bottom:-2px; background:none; font-weight:700; color:#667eea; cursor:pointer; font-size:0.88em;">
+          ⚙️ Ωράριο Εβδομάδας
+        </button>
+        <button id="settingsTabBtnDefaults" onclick="switchSettingsTab('defaults')"
+          style="padding:5px 14px; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; background:none; font-weight:400; color:#64748b; cursor:pointer; font-size:0.88em;">
+          🔧 Προεπιλογές
+        </button>
+      </div>
 
-      <h3 style="margin-top: 20px; margin-bottom: 10px; color: #667eea;">Βασικές αποδοχές (ελάχιστα όρια)</h3>
-      <p style="color:#666; font-size:0.85em; margin-bottom:10px;">Βάση πλήρους απασχόλησης (40ω/εβδ.). Οι τριετίες και
-        οι μερικές απασχολήσεις υπολογίζονται αυτόματα.</p>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Ελάχιστος μηνιαίος μισθός (€)</label>
-          <input type="number" id="defBaseMinMonthlySalary" min="0" step="0.01">
-        </div>
-        <div class="form-group">
-          <label>Ελάχιστο ωρομίσθιο (€/ώρα)</label>
-          <input type="number" id="defBaseMinHourlyRate" min="0" step="0.01">
+      <div id="settingsTabWeek">
+        <p style="color:#666; margin:0 0 6px; font-size:0.82em;">Αλλαγές μόνο για αυτή την εβδομάδα. 🎉 = επίσημη αργία
+          (+75%).</p>
+        <div id="businessHoursForm"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" onclick="copyFromDefaultHours()">Reset to Default</button>
+          <button class="btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+          <button class="btn-primary" onclick="saveBusinessHours()">Save</button>
         </div>
       </div>
 
-      <h3 style="margin-top: 20px; margin-bottom: 10px; color: #667eea;">Προεπιλεγμένες Ώρες Επιχείρησης</h3>
-      <div id="defaultBusinessHoursForm">
-        <!-- Populated by JavaScript -->
-      </div>
-
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="closeModal('defaultsModal')">Cancel</button>
-        <button class="btn-primary" onclick="saveDefaults()">Save Defaults</button>
+      <div id="settingsTabDefaults" style="display:none;">
+        <h3 style="margin:0 0 3px; color:#667eea; font-size:0.88em;">Βασικές αποδοχές (ελάχιστα)</h3>
+        <p style="color:#666; font-size:0.8em; margin:0 0 6px;">Βάση πλήρους απασχόλησης (40ω/εβδ.). Τριετίες &amp;
+          μερική εργασία υπολογίζονται αυτόματα.</p>
+        <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-group">
+            <label>Ελάχιστος μηνιαίος μισθός (€)</label>
+            <input type="number" id="defBaseMinMonthlySalary" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Ελάχιστο ωρομίσθιο (€/ώρα)</label>
+            <input type="number" id="defBaseMinHourlyRate" min="0" step="0.01">
+          </div>
+        </div>
+        <h3 style="margin:8px 0 3px; color:#667eea; font-size:0.88em;">Προεπιλεγμένο Ωράριο</h3>
+        <div id="defaultBusinessHoursForm"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+          <button class="btn-primary" onclick="saveDefaults()">Save Defaults</button>
+        </div>
       </div>
     </div>
   </div>
