@@ -343,6 +343,10 @@ function normalizeLoadedState(loaded) {
       },
       officialHolidayPaidIfAbsent: payrollRules.officialHolidayPaidIfAbsent ?? true,
       officialHolidayPayMultiplier: Number(payrollRules.officialHolidayPayMultiplier ?? 1),
+      baseMinMonthlySalary:
+        payrollRules.baseMinMonthlySalary != null ? Number(payrollRules.baseMinMonthlySalary) : undefined,
+      baseMinHourlyRate:
+        payrollRules.baseMinHourlyRate != null ? Number(payrollRules.baseMinHourlyRate) : undefined,
     },
     weekBusinessHours: Object.fromEntries(
       Object.entries(loaded.weekBusinessHours || {}).map(([wk, v]) => [
@@ -398,6 +402,16 @@ async function loadData() {
 
     const loaded = pickBestSnapshot([localPrimary, idbRaw])
     data = normalizeLoadedState(loaded)
+
+    // Restore user-edited minimum salary/rate into window.PAYROLL_RULES
+    if (data.payrollRules?.baseMinMonthlySalary != null) {
+      window.PAYROLL_RULES = window.PAYROLL_RULES || {}
+      window.PAYROLL_RULES.baseMinMonthlySalary = data.payrollRules.baseMinMonthlySalary
+    }
+    if (data.payrollRules?.baseMinHourlyRate != null) {
+      window.PAYROLL_RULES = window.PAYROLL_RULES || {}
+      window.PAYROLL_RULES.baseMinHourlyRate = data.payrollRules.baseMinHourlyRate
+    }
 
     // self-heal all backends with chosen snapshot
     const payload = JSON.stringify(sanitizeStateForPersist(data))

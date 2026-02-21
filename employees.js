@@ -5,6 +5,38 @@ function togglePayTypeFields() {
   if (!hourly || !monthly) return
   hourly.style.display = payType === 'hourly' ? 'flex' : 'none'
   monthly.style.display = payType === 'monthly' ? 'flex' : 'none'
+  updateEmployeeMinHints()
+}
+
+function updateEmployeeMinHints() {
+  const PR = window.PAYROLL_RULES || {}
+  const baseMinMonthly = Number(PR.baseMinMonthlySalary ?? 880)
+  const baseMinHourly = Number(PR.baseMinHourlyRate ?? 5.86)
+  const triennia = parseInt(document.getElementById('employeeTriennia')?.value || '0') || 0
+  const bonus = 1 + triennia * 0.1
+
+  // Hourly hint
+  const minHourly = Math.round(baseMinHourly * bonus * 100) / 100
+  const hourlyRateVal = parseFloat(document.getElementById('employeeHourlyRate')?.value) || 0
+  const hourlyHint = document.getElementById('hourlyRateMinHint')
+  if (hourlyHint) {
+    const below = hourlyRateVal > 0 && hourlyRateVal < minHourly
+    hourlyHint.textContent = `Ελάχιστο: €${minHourly.toFixed(2)}/ώρα`
+    hourlyHint.style.color = below ? '#c0392b' : '#888'
+    hourlyHint.style.fontWeight = below ? 'bold' : 'normal'
+  }
+
+  // Monthly hint (prorated by weekly hours relative to full-time 40 h)
+  const weekHours = parseFloat(document.getElementById('employeeMonthlyWeekHours')?.value) || 40
+  const minMonthly = Math.round(baseMinMonthly * bonus * (weekHours / 40) * 100) / 100
+  const monthlyVal = parseFloat(document.getElementById('employeeMonthlySalary')?.value) || 0
+  const monthlyHint = document.getElementById('monthlySalaryMinHint')
+  if (monthlyHint) {
+    const below = monthlyVal > 0 && monthlyVal < minMonthly
+    monthlyHint.textContent = `Ελάχιστο: €${minMonthly.toFixed(2)}/μήνα`
+    monthlyHint.style.color = below ? '#c0392b' : '#888'
+    monthlyHint.style.fontWeight = below ? 'bold' : 'normal'
+  }
 }
 
 function openEmployeeModal(employeeId = null) {
@@ -32,6 +64,7 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('employeeNick').value = emp.nickName || ''
     document.getElementById('employeeVat').value = emp.vat || ''
     document.getElementById('employeePayType').value = emp.payType || 'hourly'
+    document.getElementById('employeeTriennia').value = String(emp.triennia ?? 0)
     document.getElementById('employeeHourlyRate').value = emp.hourlyRate || 10
     document.getElementById('employeeHourlyWeekHours').value = emp.weekWorkingHours || 40
     document.getElementById('employeeHourlyWeekDays').value = emp.weekWorkingDays || 5
@@ -52,6 +85,7 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('employeeNick').value = ''
     document.getElementById('employeeVat').value = ''
     document.getElementById('employeePayType').value = 'hourly'
+    document.getElementById('employeeTriennia').value = '0'
     document.getElementById('employeeHourlyRate').value = empDefaults.hourlyRate || 10
     document.getElementById('employeeHourlyWeekHours').value = 40
     document.getElementById('employeeHourlyWeekDays').value = 5
@@ -71,6 +105,10 @@ function saveEmployee() {
   const vat = document.getElementById('employeeVat').value.trim()
   const nickName = document.getElementById('employeeNick').value.trim()
   const payType = document.getElementById('employeePayType').value || 'hourly'
+  const triennia = Math.min(
+    3,
+    Math.max(0, parseInt(document.getElementById('employeeTriennia')?.value || '0') || 0),
+  )
   const hourlyRate = parseFloat(document.getElementById('employeeHourlyRate').value) || 10
   const hourlyWeekHours = parseFloat(document.getElementById('employeeHourlyWeekHours').value) || 40
   const hourlyWeekDays = parseInt(document.getElementById('employeeHourlyWeekDays').value) || 5
@@ -119,6 +157,30 @@ function saveEmployee() {
     return
   }
 
+  // Minimum salary / rate enforcement (prorated for partial-time)
+  const _PR = window.PAYROLL_RULES || {}
+  const _baseMinMonthly = Number(_PR.baseMinMonthlySalary ?? 880)
+  const _baseMinHourly = Number(_PR.baseMinHourlyRate ?? 5.86)
+  const _triBonus = 1 + triennia * 0.1
+  if (payType === 'hourly') {
+    const _minHourly = Math.round(_baseMinHourly * _triBonus * 100) / 100
+    if (hourlyRate < _minHourly) {
+      alert(
+        `Το ωρομίσθιο €${hourlyRate.toFixed(2)} είναι κάτω από το ελάχιστο επιτρεπτό €${_minHourly.toFixed(2)}/ώρα (βάση €${_baseMinHourly.toFixed(2)} + ${triennia} τριετίες).`,
+      )
+      return
+    }
+  } else if (payType === 'monthly') {
+    const _weekHrsM = monthlyWeekHours
+    const _minMonthly = Math.round(_baseMinMonthly * _triBonus * (_weekHrsM / 40) * 100) / 100
+    if (monthlySalary < _minMonthly) {
+      alert(
+        `Ο μηνιαίος μισθός €${monthlySalary.toFixed(2)} είναι κάτω από το ελάχιστο επιτρεπτό €${_minMonthly.toFixed(2)}/μήνα (βάση €${_baseMinMonthly.toFixed(2)} + ${triennia} τριετίες, αναλογικά ${_weekHrsM}h/εβδ.).`,
+      )
+      return
+    }
+  }
+
   if (editId) {
     const oldId = String(editId)
     const emp = data.employees.find((e) => String(e.vat) === oldId)
@@ -150,6 +212,7 @@ function saveEmployee() {
     emp.vat = vat
     emp.nickName = nickName
     emp.payType = payType
+    emp.triennia = triennia
     emp.hourlyRate = hourlyRate
     emp.weekWorkingHours = payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours
     emp.weekWorkingDays = payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays
@@ -160,6 +223,7 @@ function saveEmployee() {
       vat,
       nickName: nickName,
       payType,
+      triennia,
       hourlyRate,
       weekWorkingHours: payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours,
       weekWorkingDays: payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays,

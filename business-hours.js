@@ -114,6 +114,13 @@ function openDefaultsModal() {
   const modal = document.getElementById('defaultsModal')
   const form = document.getElementById('defaultBusinessHoursForm')
 
+  // Populate base minimum salary / rate fields from live PAYROLL_RULES
+  const PR = window.PAYROLL_RULES || {}
+  const msSalEl = document.getElementById('defBaseMinMonthlySalary')
+  const msRateEl = document.getElementById('defBaseMinHourlyRate')
+  if (msSalEl) msSalEl.value = Number(PR.baseMinMonthlySalary ?? 880).toFixed(2)
+  if (msRateEl) msRateEl.value = Number(PR.baseMinHourlyRate ?? 5.86).toFixed(2)
+
   // Populate default business hours form
   let html = ''
   DAYS.forEach((day, i) => {
@@ -216,6 +223,25 @@ function saveEmployeePresets() {
 }
 
 function saveDefaults() {
+  // Save base minimum salary / hourly rate
+  const newBaseMonthly = parseFloat(document.getElementById('defBaseMinMonthlySalary')?.value)
+  const newBaseHourly = parseFloat(document.getElementById('defBaseMinHourlyRate')?.value)
+  if (isNaN(newBaseMonthly) || newBaseMonthly < 0) {
+    alert('Ο ελάχιστος μηνιαίος μισθός πρέπει να είναι θετικός αριθμός.')
+    return
+  }
+  if (isNaN(newBaseHourly) || newBaseHourly < 0) {
+    alert('Το ελάχιστο ωρομίσθιο πρέπει να είναι θετικός αριθμός.')
+    return
+  }
+  window.PAYROLL_RULES = window.PAYROLL_RULES || {}
+  window.PAYROLL_RULES.baseMinMonthlySalary = newBaseMonthly
+  window.PAYROLL_RULES.baseMinHourlyRate = newBaseHourly
+  // Persist into data.payrollRules so it survives page reload
+  data.payrollRules = data.payrollRules || {}
+  data.payrollRules.baseMinMonthlySalary = newBaseMonthly
+  data.payrollRules.baseMinHourlyRate = newBaseHourly
+
   // Save default business hours
   let hasError = false
   DAYS.forEach((day, i) => {

@@ -140,6 +140,19 @@ window.PAYROLL_RULES = {
   //    used in most collective agreements (ΕΓΣΣΕ).
   // ---------------------------------------------------------------------------
   monthlyWorkingDays: 25, // conventional monthly working-day divisor
+
+  // ---------------------------------------------------------------------------
+  // 7. MINIMUM SALARY / HOURLY RATE BASELINE
+  //    The national minimum for full-time employment (5 days / 40 h per week).
+  //
+  //    Partial-time monthly minimums are prorated: min × (weeklyHours / 40).
+  //    Each 3-year employment period (τριετία) adds 10 % to the base,
+  //    for up to 3 periods (maximum +30 %).
+  //
+  //    Edit these values when the statutory minimum changes.
+  // ---------------------------------------------------------------------------
+  baseMinMonthlySalary: 880, // € / month baseline (full-time, 40 h/week)
+  baseMinHourlyRate: 5.86, // € / hour baseline (hourly employees)
 }
 
 // Pre-computed convenience values derived from PAYROLL_RULES.
