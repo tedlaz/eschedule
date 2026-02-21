@@ -19,7 +19,7 @@
 
     <div class="controls">
       <button class="btn-primary" onclick="openEmployeeModal()" title="Νέος εργαζόμενος">+ Εργ</button>
-      <button class="btn-secondary" onclick="openSettingsModal('week')" title="Ρυθμίσεις">⚙️🔧</button>
+      <button class="btn-secondary" onclick="openSettingsModal('week')" title="Ρυθμίσεις">⚙️</button>
       <button class="btn-secondary" onclick="openWorkRestModal()" title="Εργασία/Ανάπαυση">📊</button>
       <button class="btn-secondary" onclick="openPayrollModal()" title="Μισθοδοσία">💶</button>
       <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
@@ -27,7 +27,7 @@
       <button class="btn-secondary" id="multiSelectBtn" onclick="toggleMultiSelectMode()"
         title="Ενεργοποίηση πολλαπλής επιλογής">☐</button>
       <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή αρχείου">📥</button>
-      <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">📤</button>
+      <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">🗃️</button>
       <button class="btn-danger" onclick="resetAllData()" title="Καθαρισμός όλων των δεδομένων">✕</button>
 
       <div class="selection-actions" id="selectionActions">
@@ -79,10 +79,10 @@
         <div class="form-group">
           <label>Τριετίες</label>
           <select id="employeeTriennia" onchange="updateEmployeeMinHints()">
-            <option value="0">0 — βασική αμοιβή</option>
-            <option value="1">1 — +10%</option>
-            <option value="2">2 — +20%</option>
-            <option value="3">3 — +30% (μέγιστο)</option>
+            <option value="0">0 βασική αμοιβή</option>
+            <option value="1">1 +10%</option>
+            <option value="2">2 +20%</option>
+            <option value="3">3 +30%</option>
           </select>
         </div>
       </div>
