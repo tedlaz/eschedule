@@ -15,7 +15,7 @@ A **client-side only** Greek work scheduling app. Handles weekly schedules, shif
 - **Minimum wage enforcement** — statutory monthly salary (default €880) and hourly rate (default €5.86) are enforced at employee save time, with prorating for part-time contracts and automatic triennial (τριετία) bonuses (+10 % per 3-year period, up to +30 %)
 - **Payroll summary** — full Greek labour-law rules: night premium (+25 %), holiday pay (×1.75), Sunday premium (+75 %), overtime tiers (Πρόσθετη / Υπερεργασία / Υπερωρία / Παράνομη)
 - **Monthly payroll export** — per-employee JSON with all bucket hours and amounts
-- **Timeline modal** — visual shift bar per employee for a given day, with drag-to-adjust
+- **Timeline modal** — visual shift bar per employee for a given day
 - **Work/rest diagram** — compliance check for 11-hour daily rest and 24-hour weekly rest
 - **Card diff** — compare scheduled times against clock-card CSV data
 - **JSON export / import** — full state backup and merge
@@ -24,6 +24,8 @@ A **client-side only** Greek work scheduling app. Handles weekly schedules, shif
 ## Persistence
 
 State is written to both `localStorage` (`eschedule_state_v1`) and `IndexedDB`; the most recent / largest snapshot wins on load.
+
+All payroll rule overrides saved via **⚙️ → Προεπιλογές** are also persisted and restored automatically on the next page load via `applyPayrollRuleOverrides()` in `app.js`.
 
 ## Run
 
@@ -37,32 +39,50 @@ python -m http.server
 
 ## File structure
 
-| File                | Purpose                                                 |
-| ------------------- | ------------------------------------------------------- |
-| `index.html`        | Single-page UI — all modals and layout                  |
-| `style.css`         | All styles                                              |
-| `payroll.js`        | `window.PAYROLL_RULES` — configurable payroll constants |
-| `config.js`         | `window.DEFAULT_BUSINESS_HOURS` — default opening hours |
-| `argies.js`         | Greek Easter algorithm + public holiday definitions     |
-| `adeies.js`         | Absence type definitions                                |
-| `app-state.js`      | Global `data` object and shared constants               |
-| `shift-helpers.js`  | Shift/absence type predicates                           |
-| `date-utils.js`     | Date/time math and formatting utilities                 |
-| `data-storage.js`   | IndexedDB + localStorage save/load/normalize            |
-| `schedule.js`       | Main schedule grid rendering and week navigation        |
-| `hours-calc.js`     | Week hours, costs, premiums, summary bar                |
-| `timeline.js`       | Timeline modal and drag handlers                        |
-| `employees.js`      | Employee CRUD modal                                     |
-| `shifts.js`         | Shift modal, validation, save/clear                     |
-| `business-hours.js` | Business hours, defaults and rest-days modals           |
-| `payroll-engine.js` | Payroll calculation engine and summary rendering        |
-| `export-data.js`    | JSON schedule export                                    |
-| `import-data.js`    | JSON schedule import and state merge                    |
-| `work-rest.js`      | Work/rest compliance diagram                            |
-| `print-schedule.js` | Print-to-PDF via hidden iframe                          |
-| `selection.js`      | Multi-cell selection                                    |
-| `card-diff.js`      | Time-card diff tool                                     |
-| `app.js`            | App bootstrap (`DOMContentLoaded` init)                 |
+| File                | Purpose                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `index.html`        | Single-page UI — all modals and layout                                              |
+| `style.css`         | All styles                                                                          |
+| `payroll.js`        | **All payroll rules** (`PAYROLL_RULES`, `getRule()`, `applyPayrollRuleOverrides()`) |
+| `config.js`         | `window.DEFAULT_BUSINESS_HOURS` — default opening hours, timeline colors            |
+| `argies.js`         | Greek Easter algorithm + public holiday definitions                                 |
+| `adeies.js`         | Absence type definitions                                                            |
+| `app-state.js`      | Global `data` object and shared constants                                           |
+| `shift-helpers.js`  | Shift/absence type predicates                                                       |
+| `date-utils.js`     | Date/time math and formatting utilities                                             |
+| `data-storage.js`   | IndexedDB + localStorage save/load/normalize                                        |
+| `schedule.js`       | Main schedule grid rendering and week navigation                                    |
+| `hours-calc.js`     | Week hours, costs, premiums, summary bar                                            |
+| `timeline.js`       | Timeline modal and drag handlers                                                    |
+| `employees.js`      | Employee CRUD modal                                                                 |
+| `shifts.js`         | Shift modal, validation, save/clear                                                 |
+| `business-hours.js` | Business hours, defaults and rest-days modals                                       |
+| `payroll-engine.js` | Payroll calculation engine and summary rendering                                    |
+| `export-data.js`    | JSON schedule export                                                                |
+| `import-data.js`    | JSON schedule import and state merge                                                |
+| `work-rest.js`      | Work/rest compliance diagram                                                        |
+| `print-schedule.js` | Print-to-PDF via hidden iframe                                                      |
+| `selection.js`      | Multi-cell selection                                                                |
+| `card-diff.js`      | Time-card diff tool                                                                 |
+| `app.js`            | App bootstrap (`DOMContentLoaded` init)                                             |
+
+## Payroll rule architecture
+
+All rules are data, not code. The engine never contains magic numbers.
+
+```
+payroll.js          ← edit rules here (single source of truth)
+  └─ PAYROLL_RULES  ← all thresholds, multipliers, premium modes
+  └─ getRule(key)   ← zero-fallback accessor used by every calculation
+  └─ applyPayrollRuleOverrides()  ← merges persisted overrides on load
+
+payroll-engine.js   ← pure computation; reads rules only via getRule()
+hours-calc.js       ← aggregations; reads rules only via getRule()
+business-hours.js   ← settings UI; writes overrides to data.payrollRules
+app.js              ← calls applyPayrollRuleOverrides(data.payrollRules) on startup
+```
+
+To change a rule value, edit `payroll.js` (code-level default) **or** use the **⚙️ → Προεπιλογές** UI (persisted override). See [payroll_rules.md](payroll_rules.md) for full documentation and instructions for adding new pay categories.
 
 ## Employee fields
 
@@ -97,4 +117,4 @@ The single **⚙️🔧** toolbar button opens a two-tab modal:
 
 ## Payroll rules
 
-See [payroll_rules.md](payroll_rules.md) for the full documentation of the Greek payroll calculation rules implemented in `payroll-engine.js` and configured via `payroll.js`.
+See [payroll_rules.md](payroll_rules.md) for the full documentation of the Greek payroll calculation rules implemented in `payroll-engine.js` and configured via `payroll.js`, including instructions for editing existing rules and adding new pay categories.

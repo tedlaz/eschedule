@@ -68,15 +68,14 @@ function calculateMonthlyOverworkExtra(employeeId, monthKey, monthlySalary, week
     weekHoursMap[wk] = (weekHoursMap[wk] || 0) + shiftTotalHours(shift)
   })
 
-  const _PR2 = window.PAYROLL_RULES || {}
-  const _weekNorm = _PR2.weeklyNormalMax ?? 40
-  const _mwd = _PR2.monthlyWorkingDays ?? 25
+  const _weekNorm = getRule('weeklyNormalMax')
+  const _mwd = getRule('monthlyWorkingDays')
   const extraHours = Object.values(weekHoursMap).reduce(
     (acc, h) => acc + Math.max(0, Number(h || 0) - _weekNorm),
     0,
   )
   const hourlyBase = (Number(monthlySalary || 0) * 6) / (_mwd * _weekNorm)
-  const extraPay = extraHours * hourlyBase * (_PR2.multipliers?.ye ?? 1.2) // +20% υπερεργασία
+  const extraPay = extraHours * hourlyBase * getRule('multipliers').ye // +20% υπερεργασία
   return {
     extraHours: Math.round(extraHours * 100) / 100,
     extraPay: Math.round(extraPay * 100) / 100,
@@ -145,9 +144,8 @@ function calculateNightHours(start, end) {
   let endMin = eh * 60 + em
   if (endMin <= startMin) endMin += 24 * 60 // overnight shift
 
-  const _PR1 = window.PAYROLL_RULES || {}
-  const _nightStartMin1 = _PR1.nightStartMinutes ?? 1320
-  const _nightEndMin1 = _PR1.nightEndMinutes ?? 360
+  const _nightStartMin1 = getRule('nightStartMinutes')
+  const _nightEndMin1 = getRule('nightEndMinutes')
   let nightMinutes = 0
   for (let m = startMin; m < endMin; m++) {
     const timeInDay = m % (24 * 60)
@@ -175,11 +173,10 @@ function calculateShiftPremiums(shift, dayIndex) {
   let sundayHolidayExtra = 0
   let nightExtra = 0
 
-  const _PR3 = window.PAYROLL_RULES || {}
   if (isSundayOrHoliday) {
-    sundayHolidayExtra = totalHours * (_PR3.withinHolidayAdd ?? 0.75)
+    sundayHolidayExtra = totalHours * getRule('withinHolidayAdd')
   }
-  nightExtra = nightHours * (_PR3.withinNightAdd ?? 0.25)
+  nightExtra = nightHours * getRule('withinNightAdd')
 
   return {
     totalHours,
@@ -201,7 +198,7 @@ function calculateWeekCost(employeeId, weekStart) {
     const totalHours = calculateWeekHours(employeeId, weekStart)
     const monthlySalary = Number(emp.monthlySalary || 0)
     const weeklyBase = Math.round(((monthlySalary * 12) / 52) * 100) / 100
-    const _mwd = window.PAYROLL_RULES?.monthlyWorkingDays ?? 25
+    const _mwd = getRule('monthlyWorkingDays')
     const _wh = Number(emp.weekWorkingHours || 40)
     const _wd = Number(emp.weekWorkingDays || 5)
     const _hourlyRate = _wh > 0 ? monthlySalary / ((_wh * _mwd) / 6) : 0

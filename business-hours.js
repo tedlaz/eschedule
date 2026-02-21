@@ -33,11 +33,10 @@ function openSettingsModal(tab) {
   form.innerHTML = html
 
   // Build defaults form
-  const PR = window.PAYROLL_RULES || {}
   const msSalEl = document.getElementById('defBaseMinMonthlySalary')
   const msRateEl = document.getElementById('defBaseMinHourlyRate')
-  if (msSalEl) msSalEl.value = Number(PR.baseMinMonthlySalary ?? 880).toFixed(2)
-  if (msRateEl) msRateEl.value = Number(PR.baseMinHourlyRate ?? 5.86).toFixed(2)
+  if (msSalEl) msSalEl.value = Number(getRule('baseMinMonthlySalary')).toFixed(2)
+  if (msRateEl) msRateEl.value = Number(getRule('baseMinHourlyRate')).toFixed(2)
 
   const defForm = document.getElementById('defaultBusinessHoursForm')
   let defHtml = ''
@@ -243,13 +242,15 @@ function saveDefaults() {
     alert('Το ελάχιστο ωρομίσθιο πρέπει να είναι θετικός αριθμός.')
     return
   }
-  window.PAYROLL_RULES = window.PAYROLL_RULES || {}
   window.PAYROLL_RULES.baseMinMonthlySalary = newBaseMonthly
   window.PAYROLL_RULES.baseMinHourlyRate = newBaseHourly
-  // Persist into data.payrollRules so it survives page reload
-  data.payrollRules = data.payrollRules || {}
-  data.payrollRules.baseMinMonthlySalary = newBaseMonthly
-  data.payrollRules.baseMinHourlyRate = newBaseHourly
+  // Persist all of PAYROLL_RULES (minus derived keys) so applyPayrollRuleOverrides
+  // can restore every rule on the next page load.
+  const DERIVED_KEYS = new Set(['nightStartMinutes', 'nightEndMinutes'])
+  data.payrollRules = {}
+  Object.entries(window.PAYROLL_RULES).forEach(([k, v]) => {
+    if (!DERIVED_KEYS.has(k)) data.payrollRules[k] = v
+  })
 
   // Save default business hours
   let hasError = false

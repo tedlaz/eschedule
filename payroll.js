@@ -153,9 +153,63 @@ window.PAYROLL_RULES = {
   // ---------------------------------------------------------------------------
   baseMinMonthlySalary: 880, // € / month baseline (full-time, 40 h/week)
   baseMinHourlyRate: 5.86, // € / hour baseline (hourly employees)
+
+  // ---------------------------------------------------------------------------
+  // 8. CATEGORY PREMIUM MODES
+  //    Controls how night/holiday premiums are applied for each pay category.
+  //
+  //    'additive'       → premiums are added as fractions of the base hourly rate.
+  //                       Used for 'within': the base hour is already in the salary,
+  //                       so only the premium fraction is extra pay.
+  //    'multiplicative' → the category base multiplier is then multiplied by the
+  //                       applicable night/holiday premium factors.
+  //                       Used for all overtime / additional categories.
+  //
+  //    To introduce a new pay category:
+  //      1. Add its key to 'multipliers' with the desired base multiplier.
+  //      2. Add its key here with 'multiplicative' (or 'additive' if needed).
+  //      3. Add it to PAYROLL_CATEGORIES in payroll-engine.js.
+  //    No engine code needs to change.
+  // ---------------------------------------------------------------------------
+  categoryPremiumMode: {
+    within: 'additive', // add fractions: base already covered by salary
+    additional: 'multiplicative', // base × nightPremiumFactor × holidayPremiumFactor
+    ye: 'multiplicative',
+    yp: 'multiplicative',
+    illegal: 'multiplicative',
+  },
 }
 
 // Pre-computed convenience values derived from PAYROLL_RULES.
 // Scripts can use these instead of recalculating multiplications.
 window.PAYROLL_RULES.nightStartMinutes = window.PAYROLL_RULES.nightStartHour * 60 // 1320
 window.PAYROLL_RULES.nightEndMinutes = window.PAYROLL_RULES.nightEndHour * 60 // 360
+
+// ---------------------------------------------------------------------------
+// getRule(key) — single accessor for all payroll rule values.
+// Use this everywhere instead of inline `window.PAYROLL_RULES?.X ?? fallback`.
+// The object always has every key populated (either defaults or user overrides),
+// so no fallback is needed at the call site.
+// ---------------------------------------------------------------------------
+window.getRule = function (key) {
+  return window.PAYROLL_RULES[key]
+}
+
+// ---------------------------------------------------------------------------
+// applyPayrollRuleOverrides(overrides) — merges persisted user overrides on top
+// of the code-level defaults in PAYROLL_RULES.
+// Call this once after loadData() so that saved settings (e.g. minimum salary)
+// are restored before any calculation runs.
+// Re-derives nightStartMinutes / nightEndMinutes if the night window changed.
+// ---------------------------------------------------------------------------
+window.applyPayrollRuleOverrides = function (overrides) {
+  if (!overrides || typeof overrides !== 'object') return
+  // Derived keys are always re-computed below — never copy them directly.
+  const DERIVED = new Set(['nightStartMinutes', 'nightEndMinutes'])
+  Object.entries(overrides).forEach(([k, v]) => {
+    if (!DERIVED.has(k)) window.PAYROLL_RULES[k] = v
+  })
+  // Re-compute derived values in case nightStartHour / nightEndHour changed.
+  window.PAYROLL_RULES.nightStartMinutes = window.PAYROLL_RULES.nightStartHour * 60
+  window.PAYROLL_RULES.nightEndMinutes = window.PAYROLL_RULES.nightEndHour * 60
+}

@@ -56,9 +56,7 @@ function shiftRangeToSlices(dayStr, start, end, originType = 'ΕΡΓ') {
       day: actualDay,
       sourceDay: dayStr,
       hours: dur / 60,
-      isNight:
-        minuteInDay < (window.PAYROLL_RULES?.nightEndMinutes ?? 360) ||
-        minuteInDay >= (window.PAYROLL_RULES?.nightStartMinutes ?? 1320),
+      isNight: minuteInDay < getRule('nightEndMinutes') || minuteInDay >= getRule('nightStartMinutes'),
       isHoliday: isHolidayOrSundayDate(dayStr),
       isOfficialHoliday: isOfficialHolidayDate(dayStr),
       shiftType: originType === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ',
@@ -80,12 +78,11 @@ function classifyWeekSlices(employeeId, weekKey) {
     return src >= weekKey && src <= weekEnd
   }
 
-  const _PR4 = window.PAYROLL_RULES || {}
-  const _dailyIllegal = _PR4.dailyIllegalThreshold ?? 11
-  const _dailyYp = _PR4.dailyYpThreshold ?? 9
-  const _dailyYe = _PR4.dailyYeThreshold ?? 8
-  const _weekNorm4 = _PR4.weeklyNormalMax ?? 40
-  const _weekYe4 = _PR4.weeklyYeMax ?? 45
+  const _dailyIllegal = getRule('dailyIllegalThreshold')
+  const _dailyYp = getRule('dailyYpThreshold')
+  const _dailyYe = getRule('dailyYeThreshold')
+  const _weekNorm4 = getRule('weeklyNormalMax')
+  const _weekYe4 = getRule('weeklyYeMax')
 
   // Build per-day slice arrays (Mon=0 … Sun=6), sorted by time within each day
   const slicesByDay = []
@@ -229,32 +226,26 @@ function bucketPayMultiplier(bucketKey) {
   const isHolidayOrSunday = isOfficialHoliday || isSunday
   const cat = String(bucketKey).split('_')[0]
 
-  const PR = window.PAYROLL_RULES || {}
-  const mults = PR.multipliers || {}
-  const baseFactorMap = {
-    within: mults.within ?? 0,
-    additional: mults.additional ?? 1.12,
-    ye: mults.ye ?? 1.2,
-    yp: mults.yp ?? 1.4,
-    illegal: mults.illegal ?? 1.8,
-  }
+  const mults = getRule('multipliers') || {}
+  const premiumMode = (getRule('categoryPremiumMode') || {})[cat] || 'multiplicative'
+  const base = Number(mults[cat] ?? 0)
 
-  const base = Number(baseFactorMap[cat] ?? 0)
-  if (cat === 'within') {
-    const nightAdd = isNight ? (PR.withinNightAdd ?? 0.25) : 0
-    const holidayAdd = isHolidayOrSunday ? (PR.withinHolidayAdd ?? 0.75) : 0
-    // Base multiplier: 1.0 for regular work or official holidays
-    // (official holidays fully paid: 1.0 base + 0.75 premium = 1.75)
-    // Plain Sunday: premium only (base already in salary), so 0.75 extra
+  if (premiumMode === 'additive') {
+    // 'within' category: base hour already covered by salary.
+    // Official holiday: base re-included (fully paid) when holidayHoursFullyPaid = true.
+    // Plain Sunday: premium-only (base in salary), so no base re-inclusion.
+    const nightAdd = isNight ? getRule('withinNightAdd') : 0
+    const holidayAdd = isHolidayOrSunday ? getRule('withinHolidayAdd') : 0
     const baseMultiplier =
-      (isOfficialHoliday && PR.holidayHoursFullyPaid !== false) || !isHolidayOrSunday ? 1 : 0
+      (isOfficialHoliday && getRule('holidayHoursFullyPaid') !== false) || !isHolidayOrSunday ? 1 : 0
     return baseMultiplier + nightAdd + holidayAdd
   }
 
-  // Overtime/additional categories: both official holidays and Sundays get ×1.75
+  // 'multiplicative' mode: overtime/additional categories.
+  // Apply premium factors on top of the category base multiplier.
   let mult = base
-  if (isNight) mult *= PR.nightPremiumFactor ?? 1.25
-  if (isHolidayOrSunday) mult *= PR.holidayPremiumFactor ?? 1.75
+  if (isNight) mult *= getRule('nightPremiumFactor')
+  if (isHolidayOrSunday) mult *= getRule('holidayPremiumFactor')
   return mult
 }
 
@@ -491,7 +482,7 @@ function renderDailyPayrollTable(title, rows, employeeId = '', monthFilter = '')
   const monthlySalary = Number(selectedEmp?.monthlySalary || 0)
   const baseHourlyRate =
     isMonthly && weekHoursCfg > 0
-      ? monthlySalary / ((weekHoursCfg * (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) / 6)
+      ? monthlySalary / ((weekHoursCfg * getRule('monthlyWorkingDays')) / 6)
       : Number(selectedEmp?.hourlyRate || 0)
 
   // Calculate month totals
@@ -649,7 +640,7 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
   const isMonthly = emp.payType === 'monthly'
   const baseHourlyRate =
     isMonthly && weekHoursCfg > 0
-      ? monthlySalary / ((weekHoursCfg * (window.PAYROLL_RULES?.monthlyWorkingDays ?? 25)) / 6)
+      ? monthlySalary / ((weekHoursCfg * getRule('monthlyWorkingDays')) / 6)
       : Number(emp.hourlyRate || 0)
 
   const fullRows = expandToFullMonth({}, monthFilter)
@@ -680,7 +671,7 @@ function calculateMonthlyPayrollOverview(employeeId, monthFilter) {
 
   let salaryTotal = 0
   if (isMonthly) {
-    const _mwd = window.PAYROLL_RULES?.monthlyWorkingDays ?? 25
+    const _mwd = getRule('monthlyWorkingDays')
     const _wd = Number(emp.weekWorkingDays || 5)
     const _hourlyRateDed = weekHoursCfg > 0 ? monthlySalary / ((weekHoursCfg * _mwd) / 6) : 0
     const _dailyHoursDed = _wd > 0 ? weekHoursCfg / _wd : 0
@@ -796,20 +787,9 @@ function shiftHours(start, end) {
 }
 
 function nightHours(start, end) {
-  const [sh, sm] = start.split(':').map(Number)
-  const [eh, em] = end.split(':').map(Number)
-  const startM = sh * 60 + sm
-  let endM = eh * 60 + em
-  if (endM <= startM) endM += 24 * 60
-  const _PR5 = window.PAYROLL_RULES || {}
-  const _nightStartMin5 = _PR5.nightStartMinutes ?? 1320
-  const _nightEndMin5 = _PR5.nightEndMinutes ?? 360
-  let nightMin = 0
-  for (let m = startM; m < endM; m++) {
-    const mod = m % (24 * 60)
-    if (mod < _nightEndMin5 || mod >= _nightStartMin5) nightMin++
-  }
-  return Math.round((nightMin / 60) * 100) / 100
+  // Delegates to calculateNightHours (hours-calc.js) which holds the canonical
+  // implementation. Rounds to 2 decimal places for payroll precision.
+  return Math.round(calculateNightHours(start, end) * 100) / 100
 }
 
 function weekMondayISO(dayStr) {
@@ -932,15 +912,14 @@ function aggregatePayrollClient(state, employeeId = null) {
           nightHours(shift.start || '00:00', shift.end || '00:00') +
           (shift.start2 && shift.end2 ? nightHours(shift.start2, shift.end2) : 0)
         let premiumFactor = 1
-        const _PR6 = window.PAYROLL_RULES || {}
         // Official holiday (even if it falls on a Sunday) → fully paid: base 1 + 75 % = ×1.75.
         // Plain Sunday within contracted hours → +75 % extra only (base already in salary).
-        if (isOfficialHoliday && _PR6.holidayHoursFullyPaid !== false) {
-          premiumFactor = 1 + (_PR6.withinHolidayAdd ?? 0.75)
+        if (isOfficialHoliday && getRule('holidayHoursFullyPaid') !== false) {
+          premiumFactor = 1 + getRule('withinHolidayAdd')
         } else if (isHolidayOrSunday) {
-          premiumFactor += _PR6.withinHolidayAdd ?? 0.75
+          premiumFactor += getRule('withinHolidayAdd')
         }
-        if (night > 0 && worked > 0) premiumFactor += (night / worked) * (_PR6.withinNightAdd ?? 0.25)
+        if (night > 0 && worked > 0) premiumFactor += (night / worked) * getRule('withinNightAdd')
         payable = Math.round(worked * premiumFactor * 100) / 100
       } else {
         if (shift && isAbsenceType(shift.type)) {

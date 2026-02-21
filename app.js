@@ -3,6 +3,7 @@ currentWeekStart = getMonday(new Date())
 document.addEventListener('DOMContentLoaded', async () => {
   populateAdeiesInShiftType()
   await loadData()
+  applyPayrollRuleOverrides(data.payrollRules || {})
   ensureRestShiftsForWeek(currentWeekStart)
   await saveData()
   renderAll()
@@ -18,4 +19,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveData()
   }, 15000)
 })
-
