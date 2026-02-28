@@ -1,3 +1,22 @@
+function roundToHalfHour(timeStr) {
+  const m = String(timeStr || '').match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return timeStr
+  let h = Number(m[1])
+  let min = Number(m[2])
+  const remainder = min % 30
+  if (remainder < 15) {
+    min = min - remainder
+  } else {
+    min = min - remainder + 30
+  }
+  if (min >= 60) {
+    min = 0
+    h++
+  }
+  if (h >= 24) h = 0
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0')
+}
+
 function openCardDiffModal() {
   document.getElementById('cardDiffReport').innerHTML = ''
   document.getElementById('cardDiffModal').classList.add('active')
@@ -311,4 +330,225 @@ async function runCardDiffReport() {
       </table>
       <p style="margin-top:8px; color:#666;">Σύνολο εγγραφών αναφοράς: ${issues.length}</p>
     </div>`
+}
+
+function openCardGridModal() {
+  document.getElementById('cardGridContainer').innerHTML = ''
+  document.getElementById('cardGridModal').classList.add('active')
+}
+
+// Stored card entries from last renderCardGrid() call, keyed by vat_date
+let _cardGridByKey = {}
+
+function cardGridOpenTimeline(weekStartStr, dayIndex) {
+  currentWeekStart = new Date(weekStartStr + 'T00:00:00')
+  ensureRestShiftsForWeek(currentWeekStart)
+
+  // Temporarily inject card data as shifts so the timeline shows them
+  const saved = {}
+  const dayDate = new Date(currentWeekStart)
+  dayDate.setDate(dayDate.getDate() + dayIndex)
+  const dateStr = formatDate(dayDate)
+
+  ;(data.employees || []).forEach((emp) => {
+    const k = `${emp.vat}_${dateStr}`
+    const cardEntries = _cardGridByKey[k]
+    if (!cardEntries || cardEntries.length === 0) return
+    // Save whatever was there (shift or undefined)
+    saved[k] = data.shifts[k]
+    // Build a shift from card entries
+    const first = cardEntries[0]
+    const shift = { type: 'ΕΡΓ', start: first.in, end: first.out || first.in }
+    if (cardEntries.length > 1) {
+      shift.start2 = cardEntries[1].in
+      shift.end2 = cardEntries[1].out || cardEntries[1].in
+    }
+    data.shifts[k] = shift
+  })
+
+  renderAll()
+  openTimelineModal(dayIndex)
+
+  // Restore original shifts
+  Object.keys(saved).forEach((k) => {
+    if (saved[k] === undefined) delete data.shifts[k]
+    else data.shifts[k] = saved[k]
+  })
+}
+
+function guessEmployeeDailyHours(emp) {
+  const weekH = Number(emp.weekWorkingHours || 40)
+  const weekD = Number(emp.weekWorkingDays || 5)
+  if (weekD > 0) return Math.round((weekH / weekD) * 2) / 2 // round to .5
+  return 8
+}
+
+function addHoursToTime(timeStr, hours) {
+  const m = String(timeStr).match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return timeStr
+  let totalMin = Number(m[1]) * 60 + Number(m[2]) + Math.round(hours * 60)
+  if (totalMin >= 24 * 60) totalMin = 24 * 60 - 1
+  if (totalMin < 0) totalMin = 0
+  const h = Math.floor(totalMin / 60)
+  const min = totalMin % 60
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0')
+}
+
+function subtractHoursFromTime(timeStr, hours) {
+  const m = String(timeStr).match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return timeStr
+  let totalMin = Number(m[1]) * 60 + Number(m[2]) - Math.round(hours * 60)
+  if (totalMin < 0) totalMin = 0
+  const h = Math.floor(totalMin / 60)
+  const min = totalMin % 60
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0')
+}
+
+async function renderCardGrid() {
+  const inputEl = document.getElementById('cardGridFileInput')
+  const f = inputEl?.files?.[0]
+  if (!f) return alert('Επίλεξε αρχείο κάρτας')
+
+  let fileText = ''
+  try {
+    fileText = await f.text()
+  } catch (err) {
+    console.error('Card file read failed', err)
+    if (inputEl) inputEl.value = ''
+    alert('Δεν μπόρεσα να διαβάσω το αρχείο. Επίλεξε ξανά.')
+    return
+  }
+
+  const rows = parseCardFile(fileText)
+  if (!rows.length) return alert('Δεν βρέθηκαν γραμμές στο αρχείο κάρτας')
+
+  // Build employee lookup maps
+  const employeeByVat = Object.fromEntries((data.employees || []).map((e) => [String(e.vat || '').trim(), e]))
+  const employeeByNick = Object.fromEntries(
+    (data.employees || []).map((e) => [
+      String(e.nickName || '')
+        .trim()
+        .toLowerCase(),
+      e,
+    ]),
+  )
+
+  // Parse rows into {vat, date, in, out} with rounding
+  const entries = []
+  const maxShiftH = window.MAX_SHIFT_HOURS || 13
+  rows.forEach((r) => {
+    const rawEmp = String(r.employee || '').trim()
+    const emp = employeeByVat[rawEmp] || employeeByNick[rawEmp.toLowerCase()]
+    if (!emp) return
+    const d = normalizeCardDate(r.date)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return
+    const dailyH = guessEmployeeDailyHours(emp)
+    let inTime = r.in ? roundToHalfHour(r.in) : ''
+    let outTime = r.out ? roundToHalfHour(r.out) : ''
+    if (inTime && !outTime) {
+      outTime = roundToHalfHour(addHoursToTime(inTime, Math.min(dailyH, maxShiftH)))
+    } else if (!inTime && outTime) {
+      inTime = roundToHalfHour(subtractHoursFromTime(outTime, Math.min(dailyH, maxShiftH)))
+    }
+    if (!inTime && !outTime) return
+    entries.push({ vat: emp.vat, date: d, in: inTime, out: outTime })
+  })
+
+  if (!entries.length) return alert('Δεν αντιστοιχήθηκαν εγγραφές σε εργαζομένους')
+
+  // Group entries by key (vat_date), merging multiple entries per day
+  const byKey = {}
+  entries.forEach((e) => {
+    const k = `${e.vat}_${e.date}`
+    if (!byKey[k]) byKey[k] = []
+    byKey[k].push(e)
+  })
+
+  // Store globally so cardGridOpenTimeline can use it
+  _cardGridByKey = byKey
+
+  // Collect all dates and find weeks
+  const allDates = [...new Set(entries.map((e) => e.date))].sort()
+  const weekStarts = new Set()
+  allDates.forEach((d) => {
+    const mon = getMonday(new Date(d + 'T00:00:00'))
+    weekStarts.add(formatDate(mon))
+  })
+  const sortedWeeks = [...weekStarts].sort()
+
+  // Show all employees (same as main grid)
+  const allEmployees = data.employees || []
+
+  const container = document.getElementById('cardGridContainer')
+  let html = ''
+
+  sortedWeeks.forEach((weekStart) => {
+    const ws = new Date(weekStart + 'T00:00:00')
+    const weekEnd = new Date(ws)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+    const weekRange = `${formatDisplayDate(ws)} - ${formatDisplayDate(weekEnd)}`
+
+    html += `<h3 style="margin:16px 0 6px; color:#334155;">Εβδομάδα: ${weekRange}</h3>`
+    html += '<div class="schedule-container" style="margin-bottom:16px;"><table class="schedule-table">'
+
+    // Header row
+    html += '<thead><tr><th>Εργαζόμενος</th>'
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(ws)
+      dayDate.setDate(dayDate.getDate() + i)
+      const isSunday = i === 6
+      const dateStr = formatDate(dayDate)
+      const isHoliday = typeof getHolidayName === 'function' && !!getHolidayName(dateStr)
+      let thClass = ''
+      if (isHoliday) thClass = 'holiday-header'
+      else if (isSunday) thClass = 'sunday-header'
+      html += `<th class="${thClass} clickable" onclick="cardGridOpenTimeline('${weekStart}',${i})">${DAY_ABBREV[i]}<br><small>${dayDate.getDate()}</small>`
+      if (isHoliday) html += `<div class="holiday-name">${getHolidayName(dateStr)}</div>`
+      html += '</th>'
+    }
+    html += '</tr></thead><tbody>'
+
+    // Employee rows
+    allEmployees.forEach((emp) => {
+      let weekHours = 0
+      html += `<tr class="employee-row"><td class="employee-name">${employeeLabel(emp)}</td>`
+
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(ws)
+        dayDate.setDate(dayDate.getDate() + i)
+        const dateStr = formatDate(dayDate)
+        const k = `${emp.vat}_${dateStr}`
+        const dayEntries = byKey[k] || []
+        const isSunday = i === 6
+        const isHoliday = typeof getHolidayName === 'function' && !!getHolidayName(dateStr)
+
+        let cellClass = 'shift-cell'
+        if (isHoliday || isSunday) cellClass += ' holiday-day'
+
+        html += `<td class="${cellClass}">`
+        if (dayEntries.length > 0) {
+          const parts = dayEntries.map((e) => {
+            const timeText = e.out ? `${e.in} - ${e.out}` : `${e.in} - ?`
+            const h = e.out ? shiftHours(e.in, e.out) : 0
+            weekHours += h
+            return timeText
+          })
+          const allText = parts.join(' / ')
+          html += `<div class="shift-block${isHoliday || isSunday ? ' shift-holiday' : ''}"><span class="shift-time">${allText}</span></div>`
+        }
+        html += '</td>'
+      }
+
+      html += '</tr>'
+    })
+
+    if (!allEmployees.length) {
+      html +=
+        '<tr><td colspan="8" style="text-align:center; padding:20px; color:#999;">Δεν υπάρχουν εργαζόμενοι.</td></tr>'
+    }
+
+    html += '</tbody></table></div>'
+  })
+
+  container.innerHTML = html
 }

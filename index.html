@@ -24,6 +24,7 @@
       <button class="btn-secondary" onclick="openPayrollModal()" title="Μισθοδοσία">💶</button>
       <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
       <button class="btn-secondary" onclick="openCardDiffModal()" title="Κάρτα εργαζομένου vs πρόγραμμα">🪪Δ</button>
+      <button class="btn-secondary" onclick="openCardGridModal()" title="Πρόγραμμα από κάρτα">🪪Π</button>
       <button class="btn-secondary" id="multiSelectBtn" onclick="toggleMultiSelectMode()"
         title="Ενεργοποίηση πολλαπλής επιλογής">☐</button>
       <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή αρχείου">📥</button>
@@ -279,6 +280,26 @@
         <button class="btn-primary" onclick="runCardDiffReport()">Έλεγχος διαφορών</button>
       </div>
       <div id="cardDiffReport" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Card Grid Modal -->
+  <div class="modal" id="cardGridModal">
+    <div class="modal-content wide" style="max-width:95vw;">
+      <h2>🪪 Πρόγραμμα από Κάρτα</h2>
+      <p style="color:#666; margin-bottom:10px; font-size:0.9em;">Φόρτωσε CSV/TXT από σύστημα κάρτας.
+        Οι ώρες στρογγυλοποιούνται στο πλησιέστερο μισάωρο.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Αρχείο κάρτας</label>
+          <input type="file" id="cardGridFileInput" accept=".csv,.txt">
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('cardGridModal')">Κλείσιμο</button>
+        <button class="btn-primary" onclick="renderCardGrid()">Εμφάνιση</button>
+      </div>
+      <div id="cardGridContainer" style="margin-top:12px; overflow-x:auto;"></div>
     </div>
   </div>
 
