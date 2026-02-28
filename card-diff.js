@@ -38,11 +38,31 @@ function parseCardFile(text) {
         'vat',
         'afm',
         'αφμ',
+        'επώνυμο',
+        'επωνυμο',
       ].includes(h),
     ),
-    date: headers.findIndex((h) => ['date', 'day', 'ημερομηνια', 'ημ/νια'].includes(h)),
-    in: headers.findIndex((h) => ['in', 'checkin', 'clockin', 'εισοδος', 'start'].includes(h)),
-    out: headers.findIndex((h) => ['out', 'checkout', 'clockout', 'εξοδος', 'end'].includes(h)),
+    date: headers.findIndex((h) =>
+      ['date', 'day', 'ημερομηνια', 'ημ/νια', 'ημ/νία', 'ημερομηνία'].includes(h),
+    ),
+    in: headers.findIndex((h) =>
+      ['in', 'checkin', 'clockin', 'εισοδος', 'είσοδος', 'start', 'από', 'απο', 'αρχή', 'αρχη'].includes(h),
+    ),
+    out: headers.findIndex((h) =>
+      [
+        'out',
+        'checkout',
+        'clockout',
+        'εξοδος',
+        'έξοδος',
+        'end',
+        'έως',
+        'εως',
+        'τέλος',
+        'τελος',
+        'λήξη',
+      ].includes(h),
+    ),
   }
   if (idx.employee < 0 || idx.date < 0 || idx.in < 0 || idx.out < 0) {
     throw new Error(
@@ -60,7 +80,6 @@ function parseCardFile(text) {
     }
   })
 }
-
 
 function toMinutes(t) {
   const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/)
