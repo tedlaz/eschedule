@@ -417,7 +417,11 @@ function cardGridOpenTimeline(weekStartStr, dayIndex) {
     if (dayMinStart[d] != null && dayMaxEnd[d] != null) {
       const openH = Math.max(0, dayMinStart[d] - 1)
       const closeH = Math.min(23, dayMaxEnd[d])
-      bh[d] = { open: String(openH).padStart(2, '0') + ':00', close: String(closeH).padStart(2, '0') + ':00', closed: false }
+      bh[d] = {
+        open: String(openH).padStart(2, '0') + ':00',
+        close: String(closeH).padStart(2, '0') + ':00',
+        closed: false,
+      }
     }
   }
 
