@@ -22,6 +22,19 @@ function openCardDiffModal() {
   document.getElementById('cardDiffModal').classList.add('active')
 }
 
+async function readCardFileRows(file) {
+  const name = String(file.name || '').toLowerCase()
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(buf, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';' })
+    return parseCardFile(csv)
+  }
+  const text = await file.text()
+  return parseCardFile(text)
+}
+
 function parseCardFile(text) {
   const lines = String(text || '')
     .split(/\r?\n/)
@@ -162,19 +175,15 @@ async function runCardDiffReport() {
   if (!f) return alert('Επίλεξε αρχείο κάρτας')
   const threshold = Number(document.getElementById('cardDiffThreshold').value || 15)
 
-  let fileText = ''
+  let rows
   try {
-    fileText = await f.text()
+    rows = await readCardFileRows(f)
   } catch (err) {
     console.error('Card file read failed', err)
     if (inputEl) inputEl.value = ''
-    alert(
-      'Δεν μπόρεσα να διαβάσω το αρχείο (πιθανό permission/stale reference). Επίλεξε ξανά το αρχείο κάρτας και ξαναδοκίμασε.',
-    )
+    alert('Δεν μπόρεσα να διαβάσω το αρχείο. Επίλεξε ξανά.')
     return
   }
-
-  const rows = parseCardFile(fileText)
   if (!rows.length) return alert('Δεν βρέθηκαν γραμμές στο αρχείο κάρτας')
 
   const employeeByName = Object.fromEntries(
@@ -339,41 +348,53 @@ function openCardGridModal() {
 
 // Stored card entries from last renderCardGrid() call, keyed by vat_date
 let _cardGridByKey = {}
+let _cardGridInjected = null // {saved: {key: shift|undefined}, prevWeekStart: Date}
 
 function cardGridOpenTimeline(weekStartStr, dayIndex) {
+  // Clean up any previous injection
+  cardGridRestoreShifts()
+
+  const prevWeekStart = new Date(currentWeekStart)
   currentWeekStart = new Date(weekStartStr + 'T00:00:00')
   ensureRestShiftsForWeek(currentWeekStart)
 
-  // Temporarily inject card data as shifts so the timeline shows them
+  // Inject card data as shifts for ALL 7 days of the week
   const saved = {}
-  const dayDate = new Date(currentWeekStart)
-  dayDate.setDate(dayDate.getDate() + dayIndex)
-  const dateStr = formatDate(dayDate)
+  for (let d = 0; d < 7; d++) {
+    const dayDate = new Date(currentWeekStart)
+    dayDate.setDate(dayDate.getDate() + d)
+    const dateStr = formatDate(dayDate)
 
-  ;(data.employees || []).forEach((emp) => {
-    const k = `${emp.vat}_${dateStr}`
-    const cardEntries = _cardGridByKey[k]
-    if (!cardEntries || cardEntries.length === 0) return
-    // Save whatever was there (shift or undefined)
-    saved[k] = data.shifts[k]
-    // Build a shift from card entries
-    const first = cardEntries[0]
-    const shift = { type: 'ΕΡΓ', start: first.in, end: first.out || first.in }
-    if (cardEntries.length > 1) {
-      shift.start2 = cardEntries[1].in
-      shift.end2 = cardEntries[1].out || cardEntries[1].in
-    }
-    data.shifts[k] = shift
-  })
+    ;(data.employees || []).forEach((emp) => {
+      const k = `${emp.vat}_${dateStr}`
+      const cardEntries = _cardGridByKey[k]
+      if (!cardEntries || cardEntries.length === 0) return
+      saved[k] = data.shifts[k]
+      const first = cardEntries[0]
+      const shift = { type: 'ΕΡΓ', start: first.in, end: first.out || first.in }
+      if (cardEntries.length > 1) {
+        shift.start2 = cardEntries[1].in
+        shift.end2 = cardEntries[1].out || cardEntries[1].in
+      }
+      data.shifts[k] = shift
+    })
+  }
 
+  _cardGridInjected = { saved, prevWeekStart }
   renderAll()
   openTimelineModal(dayIndex)
+}
 
-  // Restore original shifts
+function cardGridRestoreShifts() {
+  if (!_cardGridInjected) return
+  const { saved, prevWeekStart } = _cardGridInjected
   Object.keys(saved).forEach((k) => {
     if (saved[k] === undefined) delete data.shifts[k]
     else data.shifts[k] = saved[k]
   })
+  currentWeekStart = prevWeekStart
+  _cardGridInjected = null
+  renderAll()
 }
 
 function guessEmployeeDailyHours(emp) {
@@ -409,17 +430,15 @@ async function renderCardGrid() {
   const f = inputEl?.files?.[0]
   if (!f) return alert('Επίλεξε αρχείο κάρτας')
 
-  let fileText = ''
+  let rows
   try {
-    fileText = await f.text()
+    rows = await readCardFileRows(f)
   } catch (err) {
     console.error('Card file read failed', err)
     if (inputEl) inputEl.value = ''
     alert('Δεν μπόρεσα να διαβάσω το αρχείο. Επίλεξε ξανά.')
     return
   }
-
-  const rows = parseCardFile(fileText)
   if (!rows.length) return alert('Δεν βρέθηκαν γραμμές στο αρχείο κάρτας')
 
   // Build employee lookup maps

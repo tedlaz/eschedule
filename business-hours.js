@@ -439,6 +439,11 @@ function closeModal(modalId) {
     const title = modal.querySelector('h2')
     title.textContent = 'Edit Shift'
   }
+
+  // Restore card grid injected shifts when timeline closes
+  if (modalId === 'timelineModal' && typeof cardGridRestoreShifts === 'function') {
+    cardGridRestoreShifts()
+  }
 }
 
 // Data persistence (client-side only)

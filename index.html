@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>eSchedule</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 
 <body>
@@ -268,7 +269,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Αρχείο κάρτας</label>
-          <input type="file" id="cardFileInput" accept=".csv,.txt">
+          <input type="file" id="cardFileInput" accept=".csv,.txt,.xlsx,.xls">
         </div>
         <div class="form-group">
           <label>Όριο διαφοράς (λεπτά)</label>
@@ -292,7 +293,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Αρχείο κάρτας</label>
-          <input type="file" id="cardGridFileInput" accept=".csv,.txt">
+          <input type="file" id="cardGridFileInput" accept=".csv,.txt,.xlsx,.xls">
         </div>
       </div>
       <div class="modal-buttons">
