@@ -50,7 +50,7 @@ function parseCardFile(text) {
       .map((ln) => {
         const m = ln.match(plainRe)
         if (!m) return null
-        return { employee: m[1], date: m[2], in: m[3], out: m[4] }
+        return { employee: m[1], date: m[2], in: m[3], out: m[4], surname: '', firstName: '' }
       })
       .filter(Boolean)
   }
@@ -102,6 +102,13 @@ function parseCardFile(text) {
     )
   }
 
+  const surnameIdx = headers.findIndex(
+    (h, i) => i !== idx.employee && ['επώνυμο', 'επωνυμο', 'surname', 'lastname', 'last_name'].includes(h),
+  )
+  const firstNameIdx = headers.findIndex(
+    (h, i) => i !== idx.employee && ['όνομα', 'ονομα', 'firstname', 'first_name'].includes(h),
+  )
+
   return lines.slice(1).map((ln) => {
     const c = ln.split(delimiter).map((x) => x.trim())
     return {
@@ -109,6 +116,8 @@ function parseCardFile(text) {
       date: c[idx.date] || '',
       in: c[idx.in] || '',
       out: c[idx.out] || '',
+      surname: surnameIdx >= 0 ? c[surnameIdx] || '' : '',
+      firstName: firstNameIdx >= 0 ? c[firstNameIdx] || '' : '',
     }
   })
 }
@@ -348,7 +357,8 @@ function openCardGridModal() {
 
 // Stored card entries from last renderCardGrid() call, keyed by vat_date
 let _cardGridByKey = {}
-let _cardGridInjected = null // {saved: {key: shift|undefined}, prevWeekStart: Date}
+let _cardGridEmployees = [] // all employees shown in card grid (existing + virtual)
+let _cardGridInjected = null // {saved: {key: shift|undefined}, prevWeekStart, addedEmployees: []}
 
 function cardGridOpenTimeline(weekStartStr, dayIndex) {
   // Clean up any previous injection
@@ -358,18 +368,25 @@ function cardGridOpenTimeline(weekStartStr, dayIndex) {
   currentWeekStart = new Date(weekStartStr + 'T00:00:00')
   ensureRestShiftsForWeek(currentWeekStart)
 
+  // Add virtual employees (from card data) temporarily to data.employees
+  const existingVats = new Set((data.employees || []).map((e) => e.vat))
+  const addedEmployees = _cardGridEmployees.filter((e) => !existingVats.has(e.vat))
+  addedEmployees.forEach((e) => data.employees.push(e))
+
   // Inject card data as shifts for ALL 7 days of the week
   const saved = {}
+  const dayMinStart = {} // per day index: earliest shift start hour
+  const dayMaxEnd = {} // per day index: latest shift end hour
   for (let d = 0; d < 7; d++) {
     const dayDate = new Date(currentWeekStart)
     dayDate.setDate(dayDate.getDate() + d)
     const dateStr = formatDate(dayDate)
 
-    ;(data.employees || []).forEach((emp) => {
+    ;(_cardGridEmployees || []).forEach((emp) => {
       const k = `${emp.vat}_${dateStr}`
       const cardEntries = _cardGridByKey[k]
       if (!cardEntries || cardEntries.length === 0) return
-      saved[k] = data.shifts[k]
+      if (!(k in saved)) saved[k] = data.shifts[k]
       const first = cardEntries[0]
       const shift = { type: 'ΕΡΓ', start: first.in, end: first.out || first.in }
       if (cardEntries.length > 1) {
@@ -377,21 +394,55 @@ function cardGridOpenTimeline(weekStartStr, dayIndex) {
         shift.end2 = cardEntries[1].out || cardEntries[1].in
       }
       data.shifts[k] = shift
+
+      // Track min/max hours for business hours override
+      cardEntries.forEach((ce) => {
+        if (ce.in) {
+          const h = parseInt(ce.in.split(':')[0])
+          dayMinStart[d] = Math.min(dayMinStart[d] ?? 24, h)
+        }
+        if (ce.out) {
+          const h = parseInt(ce.out.split(':')[0]) + (parseInt(ce.out.split(':')[1]) > 0 ? 1 : 0)
+          dayMaxEnd[d] = Math.max(dayMaxEnd[d] ?? 0, h)
+        }
+      })
     })
   }
 
-  _cardGridInjected = { saved, prevWeekStart }
+  // Override business hours for this week to match actual card shift range
+  const weekKey = getWeekKey()
+  const bh = getBusinessHoursForWeek()
+  const savedBH = JSON.parse(JSON.stringify(bh))
+  for (let d = 0; d < 7; d++) {
+    if (dayMinStart[d] != null && dayMaxEnd[d] != null) {
+      const openH = Math.max(0, dayMinStart[d] - 1)
+      const closeH = Math.min(23, dayMaxEnd[d])
+      bh[d] = { open: String(openH).padStart(2, '0') + ':00', close: String(closeH).padStart(2, '0') + ':00', closed: false }
+    }
+  }
+
+  _cardGridInjected = { saved, prevWeekStart, addedEmployees, savedBH, weekKey }
   renderAll()
   openTimelineModal(dayIndex)
 }
 
 function cardGridRestoreShifts() {
   if (!_cardGridInjected) return
-  const { saved, prevWeekStart } = _cardGridInjected
+  const { saved, prevWeekStart, addedEmployees, savedBH, weekKey } = _cardGridInjected
+  // Restore shifts
   Object.keys(saved).forEach((k) => {
     if (saved[k] === undefined) delete data.shifts[k]
     else data.shifts[k] = saved[k]
   })
+  // Restore business hours
+  if (savedBH && weekKey && data.weekBusinessHours[weekKey]) {
+    data.weekBusinessHours[weekKey] = savedBH
+  }
+  // Remove virtual employees that were temporarily added
+  if (addedEmployees && addedEmployees.length) {
+    const removeVats = new Set(addedEmployees.map((e) => e.vat))
+    data.employees = (data.employees || []).filter((e) => !removeVats.has(e.vat))
+  }
   currentWeekStart = prevWeekStart
   _cardGridInjected = null
   renderAll()
@@ -454,11 +505,31 @@ async function renderCardGrid() {
 
   // Parse rows into {vat, date, in, out} with rounding
   const entries = []
+  const virtualEmployees = {} // keyed by raw identifier
   const maxShiftH = window.MAX_SHIFT_HOURS || 13
   rows.forEach((r) => {
     const rawEmp = String(r.employee || '').trim()
-    const emp = employeeByVat[rawEmp] || employeeByNick[rawEmp.toLowerCase()]
-    if (!emp) return
+    if (!rawEmp) return
+    let emp = employeeByVat[rawEmp] || employeeByNick[rawEmp.toLowerCase()]
+    if (!emp) {
+      // Create virtual employee from card data
+      if (!virtualEmployees[rawEmp]) {
+        const surname = String(r.surname || '').trim()
+        const firstName = String(r.firstName || '').trim()
+        const displayName = [surname, firstName].filter(Boolean).join(' ') || rawEmp
+        virtualEmployees[rawEmp] = {
+          vat: rawEmp,
+          nickName: displayName,
+          weekWorkingHours: 40,
+          weekWorkingDays: 5,
+          defaultRestDays: [5, 6],
+          payType: 'hourly',
+          hourlyRate: 0,
+          _virtual: true,
+        }
+      }
+      emp = virtualEmployees[rawEmp]
+    }
     const d = normalizeCardDate(r.date)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return
     const dailyH = guessEmployeeDailyHours(emp)
@@ -477,7 +548,7 @@ async function renderCardGrid() {
     entries.push({ vat: emp.vat, date: d, in: inTime, out: outTime, guessedIn, guessedOut })
   })
 
-  if (!entries.length) return alert('Δεν αντιστοιχήθηκαν εγγραφές σε εργαζομένους')
+  if (!entries.length) return alert('Δεν βρέθηκαν έγκυρες εγγραφές στο αρχείο κάρτας')
 
   // Group entries by key (vat_date), merging multiple entries per day
   const byKey = {}
@@ -499,8 +570,15 @@ async function renderCardGrid() {
   })
   const sortedWeeks = [...weekStarts].sort()
 
-  // Show all employees (same as main grid)
-  const allEmployees = data.employees || []
+  // Show employees from card data + any existing employees with card entries
+  const cardVats = new Set(entries.map((e) => e.vat))
+  const existingWithCard = (data.employees || []).filter((e) => cardVats.has(e.vat))
+  const existingVats = new Set(existingWithCard.map((e) => e.vat))
+  const virtuals = Object.values(virtualEmployees).filter((e) => !existingVats.has(e.vat))
+  const allEmployees = [...existingWithCard, ...virtuals]
+
+  // Store globally so cardGridOpenTimeline can inject them into timeline
+  _cardGridEmployees = allEmployees
 
   const container = document.getElementById('cardGridContainer')
   let html = ''

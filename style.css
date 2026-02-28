@@ -752,7 +752,7 @@ h1 {
 
 .timeline-grid {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 200px 1fr;
   gap: 2px;
   background: #e0e5ec;
   border-radius: 8px;
