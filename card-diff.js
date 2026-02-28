@@ -445,13 +445,17 @@ async function renderCardGrid() {
     const dailyH = guessEmployeeDailyHours(emp)
     let inTime = r.in ? roundToHalfHour(r.in) : ''
     let outTime = r.out ? roundToHalfHour(r.out) : ''
+    let guessedIn = false,
+      guessedOut = false
     if (inTime && !outTime) {
       outTime = roundToHalfHour(addHoursToTime(inTime, Math.min(dailyH, maxShiftH)))
+      guessedOut = true
     } else if (!inTime && outTime) {
       inTime = roundToHalfHour(subtractHoursFromTime(outTime, Math.min(dailyH, maxShiftH)))
+      guessedIn = true
     }
     if (!inTime && !outTime) return
-    entries.push({ vat: emp.vat, date: d, in: inTime, out: outTime })
+    entries.push({ vat: emp.vat, date: d, in: inTime, out: outTime, guessedIn, guessedOut })
   })
 
   if (!entries.length) return alert('Δεν αντιστοιχήθηκαν εγγραφές σε εργαζομένους')
@@ -528,13 +532,19 @@ async function renderCardGrid() {
         html += `<td class="${cellClass}">`
         if (dayEntries.length > 0) {
           const parts = dayEntries.map((e) => {
-            const timeText = e.out ? `${e.in} - ${e.out}` : `${e.in} - ?`
-            const h = e.out ? shiftHours(e.in, e.out) : 0
+            const warnStyle = 'style="color:white;font-size:1.2em;font-weight:bold;vertical-align:middle;"'
+            const inMark = e.guessedIn ? `<span ${warnStyle}>&gt;</span>` : ''
+            const outMark = e.guessedOut ? `<span ${warnStyle}>&gt;</span>` : ''
+            const timeText = `${inMark}${e.in} - ${e.out}${outMark}`
+            const h = shiftHours(e.in, e.out)
             weekHours += h
             return timeText
           })
+          const hasGuessed = dayEntries.some((e) => e.guessedIn || e.guessedOut)
           const allText = parts.join(' / ')
-          html += `<div class="shift-block${isHoliday || isSunday ? ' shift-holiday' : ''}"><span class="shift-time">${allText}</span></div>`
+          const guessTitle = hasGuessed ? ' title="> = εκτίμηση (έλειπε από το αρχείο)"' : ''
+          const guessClass = hasGuessed ? ' card-guessed' : ''
+          html += `<div class="shift-block${isHoliday || isSunday ? ' shift-holiday' : ''}${guessClass}"${guessTitle}><span class="shift-time">${allText}</span></div>`
         }
         html += '</td>'
       }

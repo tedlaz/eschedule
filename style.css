@@ -246,6 +246,14 @@ h1 {
   display: block;
 }
 
+@keyframes card-guess-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.card-guessed {
+  animation: card-guess-flash 2s ease-in-out infinite;
+}
+
 .shift-badges {
   display: flex;
   align-items: center;
