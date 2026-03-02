@@ -68,9 +68,6 @@ function renderGrid() {
   const table = document.getElementById('scheduleTable')
   if (!table || !viewStart) return
 
-  // Keep currentWeekStart aligned (required by ensureRestShiftsForWeek etc.)
-  currentWeekStart = getMonday(new Date(viewStart))
-
   // Update date range display
   const viewEnd = new Date(viewStart)
   viewEnd.setDate(viewEnd.getDate() + 6)
@@ -354,12 +351,64 @@ function renderAll() {
 }
 
 // ─── Card import ─────────────────────────────────────────────────────────
+function _cardTabSwitch(name) {
+  ;['load', 'save', 'clear'].forEach(t => {
+    document.getElementById(`cardTab-${t}`).classList.toggle('active', t === name)
+    document.getElementById(`cardPanel-${t}`).classList.toggle('active', t === name)
+  })
+  // Refresh status labels when switching
+  if (name === 'save') {
+    const n = Object.keys(cardData).length
+    document.getElementById('cardSaveStatus').textContent =
+      n ? `${n} εγγραφές έτοιμες για εξαγωγή.` : 'Δεν υπάρχουν φορτωμένα δεδομένα κάρτας.'
+  }
+  if (name === 'clear') {
+    const n = Object.keys(cardData).length
+    document.getElementById('cardClearStatus').textContent =
+      n ? `Θα διαγραφούν ${n} εγγραφές.` : 'Δεν υπάρχουν δεδομένα κάρτας.'
+  }
+}
+
 function clearCardData() {
   cardData = {}
   cardVirtualEmployees = []
-  const btn = document.getElementById('clearCardBtn')
-  if (btn) btn.style.display = 'none'
   renderGrid()
+  document.getElementById('cardImportStatus').textContent = ''
+  document.getElementById('cardClearStatus').textContent  = 'Τα δεδομένα κάρτας διαγράφηκαν.'
+  _cardTabSwitch('load')
+}
+
+function exportCardData() {
+  if (!Object.keys(cardData).length) { alert('Δεν υπάρχουν δεδομένα κάρτας για αποθήκευση.'); return }
+
+  const allEmps = [...data.employees, ...cardVirtualEmployees]
+
+  // Build rows array (header + data) — column names match parseCardFile aliases
+  const sheetRows = [['ΑΦΜ', 'Επώνυμο', 'Όνομα', 'Ημ/νία', 'Είσοδος', 'Έξοδος']]
+
+  Object.keys(cardData).sort().forEach(key => {
+    const entry = cardData[key]
+    if (!entry || !entry.start || !entry.end) return
+    const sep  = key.lastIndexOf('_')
+    const vat  = key.slice(0, sep)
+    const date = key.slice(sep + 1)
+    const emp  = allEmps.find(e => String(e.vat) === String(vat))
+    let surname = '', firstName = ''
+    if (emp) {
+      const parts = (emp.nickName || '').trim().split(/\s+/)
+      surname   = parts[0] || ''
+      firstName = parts.slice(1).join(' ') || ''
+    }
+    sheetRows.push([vat, surname, firstName, date, entry.start, entry.end])
+  })
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetRows)
+  // Auto-width for readability
+  ws['!cols'] = [12, 16, 16, 14, 10, 10].map(w => ({ wch: w }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Κάρτα')
+  XLSX.writeFile(wb, `karta_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
 async function importCardFile(file) {
@@ -414,8 +463,6 @@ async function importCardFile(file) {
     })
 
     renderGrid()
-    const btn = document.getElementById('clearCardBtn')
-    if (btn) btn.style.display = 'inline-block'
     return rows.length
   } catch (e) {
     alert('Σφάλμα ανάγνωσης αρχείου: ' + e.message)
@@ -435,8 +482,8 @@ function openCompanyModal() {
     const bh = data.defaultBusinessHours[d] || { open: '09:00', close: '17:00', closed: false }
     rows += `<tr>
       <td>${DAYS[d]}</td>
-      <td><input type="time" id="bhOpen${d}" value="${bh.open}"></td>
-      <td><input type="time" id="bhClose${d}" value="${bh.close}"></td>
+      <td><input type="text" id="bhOpen${d}" value="${bh.open}" maxlength="5" placeholder="ΩΩ:ΛΛ" class="bh-time-input"></td>
+      <td><input type="text" id="bhClose${d}" value="${bh.close}" maxlength="5" placeholder="ΩΩ:ΛΛ" class="bh-time-input"></td>
       <td><input type="checkbox" id="bhClosed${d}" ${bh.closed ? 'checked' : ''}></td>
     </tr>`
   }
@@ -491,6 +538,7 @@ function renderEmployeeList() {
 
 // ─── Card import modal ────────────────────────────────────────────────────
 function openCardImportModal() {
+  _cardTabSwitch('load')
   document.getElementById('cardImportModal').classList.add('active')
 }
 

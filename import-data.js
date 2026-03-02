@@ -182,6 +182,7 @@ async function importXlsxScheduleFile(file) {
     .sort()
   if (dates.length) {
     currentWeekStart = getMonday(new Date(dates[0]))
+    if (typeof viewStart !== 'undefined') viewStart = new Date(currentWeekStart)
   }
   renderAll()
 
