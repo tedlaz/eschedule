@@ -254,7 +254,7 @@ function minToStr(minutes) {
 // ─── Schedule bar ─────────────────────────────────────────────────────────
 function renderShiftBar(shift, isHolSun, gapHours, prevGapH) {
   const gapLbl = gapHours != null
-    ? `<span class="bar-gap-lbl">${gapHours}ω</span>` : ''
+    ? `<span class="bar-gap-lbl">${gapHours}</span>` : ''
 
   if (!shift) {
     return `<div class="bar-wrap"><div class="bar bar-empty">${gapLbl}</div></div>`
@@ -290,16 +290,12 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
 
   segs.sort((a, b) => a.sm - b.sm)
 
-  let totalWorkMin = segs.reduce((s, x) => s + (x.em - x.sm), 0)
-  const totalHours = totalWorkMin / 60
-  const hoursLabel = totalHours >= 1 ? `${Math.round(totalHours * 10) / 10}ω` : ''
-
   let segHtml = ''
 
   // Show gap from previous shift end to start of today's first segment
   const firstSm = segs[0].sm
   if (prevGapH != null && firstSm > 0) {
-    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(firstSm)}" title="από προηγ. βάρδια: ${prevGapH}ω"><span class="gap-lbl">${prevGapH}ω</span></div>`
+    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(firstSm)}" title="από προηγ. βάρδια: ${prevGapH}h"><span class="gap-lbl">${prevGapH}</span></div>`
   }
 
   segs.forEach((s, idx) => {
@@ -308,11 +304,12 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
       const gapMin = s.sm - segs[idx - 1].em
       if (gapMin > 0) {
         const gapH = gapMin / 60
-        const gapLabel = gapH >= 1 ? `${Math.round(gapH * 10) / 10}ω` : `${gapMin}'`
+        const gapLabel = gapH >= 1 ? `${Math.round(gapH * 10) / 10}` : `${gapMin}'`
         segHtml += `<div class="seg seg-gap" style="left:${pct(segs[idx-1].em)};width:${pct(gapMin)}" title="${minToStr(segs[idx-1].em)}–${minToStr(s.sm)}"><span class="gap-lbl">${gapLabel}</span></div>`
       }
     }
-    const lbl = (idx === 0 && hoursLabel) ? `<span class="seg-lbl">${hoursLabel}</span>` : ''
+    const segH = (s.em - s.sm) / 60
+    const lbl = segH >= 1 ? `<span class="seg-lbl">${Math.round(segH * 10) / 10}</span>` : ''
     segHtml += `<div class="seg ${s.cls}" style="left:${pct(s.sm)};width:${pct(s.em - s.sm)}" title="${s.title}">${lbl}</div>`
   })
 
@@ -328,7 +325,7 @@ function renderCardBar(entry) {
   if (em <= sm) em += 1440
 
   const hours = (em - sm) / 60
-  const hoursLabel = hours >= 1 ? `<span class="seg-lbl">${Math.round(hours * 10) / 10}ω</span>` : ''
+  const hoursLabel = hours >= 1 ? `<span class="seg-lbl">${Math.round(hours * 10) / 10}</span>` : ''
   const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
   const title = `📋 ${entry.start}–${entry.end}${guessNote}`
   // Guessed entries flash in the main grid; all card bars use the striped amber style
@@ -940,19 +937,70 @@ function _cardBarMouseUp() {
   document.removeEventListener('mouseup',   _cardBarMouseUp)
 }
 
-// ─── Schedule correctness check ──────────────────────────────────────────
+// ─── Schedule modal (tabbed) ──────────────────────────────────────────────
 
-function openScheduleCheckModal() {
-  const now = viewStart || new Date()
-  document.getElementById('chkMonth').value =
-    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  document.getElementById('chkResults').innerHTML =
-    '<p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>'
-  document.getElementById('scheduleCheckModal').classList.add('active')
+function openScheduleModal(tab) {
+  _schedTabSwitch(tab || 'load')
+  document.getElementById('scheduleModal').classList.add('active')
 }
 
+// Keep old name as alias (called from anywhere that still references it)
+function openScheduleCheckModal() { openScheduleModal('check') }
+
+function _schedTabSwitch(name) {
+  ;['load', 'save', 'check', 'print'].forEach(t => {
+    document.getElementById(`schedTab-${t}`).classList.toggle('active', t === name)
+    document.getElementById(`schedPanel-${t}`).classList.toggle('active', t === name)
+  })
+  const now = viewStart || new Date()
+  if (name === 'check') {
+    const el = document.getElementById('schedCheckMonth')
+    if (!el.value)
+      el.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }
+  if (name === 'print') {
+    document.getElementById('schedPrintDate').value = formatDate(getMonday(now))
+  }
+}
+
+function exportScheduleAsJson() {
+  const json = JSON.stringify(data, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `eschedule_${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function printWeeklySchedule() {
+  if (typeof printSchedule !== 'function') {
+    alert('Σφάλμα: το print-schedule.js δεν φορτώθηκε σωστά.')
+    return
+  }
+  const input  = document.getElementById('schedPrintDate')
+  // Ensure a default date is always present
+  if (!input.value) input.value = formatDate(getMonday(viewStart || new Date()))
+  const dateVal = input.value
+  if (!dateVal) { alert('Επιλέξτε ημερομηνία για εκτύπωση.'); return }
+
+  try {
+    const monday = getMonday(parseISODateLocal(dateVal))
+    const saved  = currentWeekStart
+    currentWeekStart = monday
+    printSchedule()
+    currentWeekStart = saved
+  } catch (e) {
+    console.error('printWeeklySchedule error:', e)
+    alert('Σφάλμα εκτύπωσης: ' + e.message)
+  }
+}
+
+// ─── Schedule correctness check ──────────────────────────────────────────
+
 function runScheduleCheck() {
-  const monthVal = document.getElementById('chkMonth').value  // "YYYY-MM"
+  const monthVal = document.getElementById('schedCheckMonth').value  // "YYYY-MM"
   if (!monthVal) return
   const [year, month] = monthVal.split('-').map(Number)
   const from = new Date(year, month - 1, 1)
@@ -1062,7 +1110,7 @@ function runScheduleCheck() {
 }
 
 function _renderCheckResults(violations) {
-  const el = document.getElementById('chkResults')
+  const el = document.getElementById('schedCheckResults')
   if (!violations.length) {
     el.innerHTML = '<div style="color:#16a34a;font-weight:600;padding:16px 0;font-size:14px">✅ Δεν βρέθηκαν παραβάσεις!</div>'
     return
@@ -1077,7 +1125,7 @@ function _renderCheckResults(violations) {
     ${warnings.length ? `<span style="color:#d97706;font-weight:600">🟡 ${warnings.length} προειδοποίηση${warnings.length !== 1 ? 'εις' : ''}</span>` : ''}
   </div><div style="display:flex;flex-direction:column;gap:5px">`
 
-  violations.forEach(v => {
+  ;[...errors, ...warnings].forEach(v => {
     const bg     = v.sev === 'error' ? '#fef2f2' : '#fffbeb'
     const border = v.sev === 'error' ? '#dc2626' : '#d97706'
     const icon   = v.sev === 'error' ? '🔴' : '🟡'

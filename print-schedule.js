@@ -236,19 +236,22 @@ function printSchedule() {
 </body>
 </html>`
 
-  // Use a hidden iframe so no extra window appears before the print dialog.
+  // Use an off-screen iframe so no extra window appears before the print dialog.
+  // NOTE: print() must be called synchronously within the user-gesture chain —
+  // a setTimeout breaks that in Chrome/Edge and silently drops the print dialog.
   const existing = document.getElementById('_printFrame')
   if (existing) existing.remove()
   const iframe = document.createElement('iframe')
   iframe.id = '_printFrame'
-  iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden;'
+  // Off-screen but with real dimensions so the browser accepts focus + print()
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:210mm;height:297mm;border:none;'
   document.body.appendChild(iframe)
   iframe.contentDocument.open()
   iframe.contentDocument.write(html)
   iframe.contentDocument.close()
   iframe.contentWindow.focus()
-  setTimeout(() => {
-    iframe.contentWindow.print()
-  }, 300)
+  iframe.contentWindow.print()
+  // Clean up after print dialog is dismissed (non-blocking)
+  setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe) }, 2000)
 }
 
