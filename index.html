@@ -237,6 +237,7 @@
     <button class="btn-secondary" onclick="openEmployeeListModal()">👥 Εργαζόμενοι</button>
     <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή προγράμματος (XLSX/JSON)">📥 Πρόγραμμα</button>
     <button class="btn-secondary" onclick="openCardImportModal()">📁 Κάρτα</button>
+    <button class="btn-secondary" onclick="openScheduleCheckModal()" title="Έλεγχος κανόνων προγράμματος">🔍 Έλεγχος</button>
 
     <!-- Navigation (centred) -->
     <div class="toolbar-nav">
@@ -511,6 +512,26 @@
 
     <div class="modal-buttons" style="margin-top:20px">
       <button class="btn-secondary" onclick="closeModal('cardImportModal')">Κλείσιμο</button>
+    </div>
+  </div>
+</div>
+
+<!-- 5a. Schedule check modal -->
+<div class="modal" id="scheduleCheckModal">
+  <div class="modal-content" style="max-width:580px">
+    <h2>🔍 Έλεγχος Προγράμματος</h2>
+    <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+      <div>
+        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
+        <input type="month" id="chkMonth" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <button class="btn-primary" onclick="runScheduleCheck()">▶ Εκτέλεση</button>
+    </div>
+    <div id="chkResults" style="max-height:420px;overflow-y:auto">
+      <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>
+    </div>
+    <div class="modal-buttons" style="margin-top:16px">
+      <button class="btn-secondary" onclick="closeModal('scheduleCheckModal')">Κλείσιμο</button>
     </div>
   </div>
 </div>

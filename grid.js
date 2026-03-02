@@ -940,6 +940,161 @@ function _cardBarMouseUp() {
   document.removeEventListener('mouseup',   _cardBarMouseUp)
 }
 
+// ─── Schedule correctness check ──────────────────────────────────────────
+
+function openScheduleCheckModal() {
+  const now = viewStart || new Date()
+  document.getElementById('chkMonth').value =
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  document.getElementById('chkResults').innerHTML =
+    '<p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>'
+  document.getElementById('scheduleCheckModal').classList.add('active')
+}
+
+function runScheduleCheck() {
+  const monthVal = document.getElementById('chkMonth').value  // "YYYY-MM"
+  if (!monthVal) return
+  const [year, month] = monthVal.split('-').map(Number)
+  const from = new Date(year, month - 1, 1)
+  const to   = new Date(year, month, 0)    // last day of month
+
+  const violations = []
+  const maxShiftH  = window.MAX_SHIFT_HOURS || 13
+  const minMonthly = (typeof getRule === 'function' && getRule('baseMinMonthlySalary')) || 880
+  const minHourly  = (typeof getRule === 'function' && getRule('baseMinHourlyRate'))    || 5.86
+
+  // Build the date list within range, plus one day before for boundary rest checks
+  const rangeDates = []
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1))
+    rangeDates.push(formatDate(new Date(d)))
+
+  const prevDay = new Date(from)
+  prevDay.setDate(prevDay.getDate() - 1)
+  const allDates = [formatDate(prevDay), ...rangeDates]
+
+  data.employees.forEach(emp => {
+    // ── Salary below legal minimum ─────────────────────────────────────
+    const tri = 1 + Math.min(emp.triennia || 0, 3) * 0.10
+    if (emp.payType === 'monthly') {
+      const adjMin = minMonthly * ((emp.weekWorkingHours || 40) / 40) * tri
+      if ((emp.monthlySalary || 0) < adjMin - 0.005) {
+        violations.push({ sev: 'warn', emp, date: null,
+          msg: `Μισθός €${(emp.monthlySalary||0).toFixed(2)} < ελάχιστο €${adjMin.toFixed(2)}` })
+      }
+    } else if (emp.payType === 'hourly') {
+      const adjMin = minHourly * ((emp.weekWorkingHours || 40) / 40) * tri
+      if ((emp.hourlyRate || 0) < adjMin - 0.005) {
+        violations.push({ sev: 'warn', emp, date: null,
+          msg: `Ωρομίσθιο €${(emp.hourlyRate||0).toFixed(2)} < ελάχιστο €${adjMin.toFixed(2)}` })
+      }
+    }
+
+    // ── Per-day + consecutive-day checks ──────────────────────────────
+    let lastWork = null  // { dateStr, endMin } — endMin relative to midnight of dateStr
+
+    allDates.forEach(dateStr => {
+      const shift = data.shifts[`${emp.vat}_${dateStr}`]
+      if (!shift || !isWorkingType(shift)) return
+
+      const [sh, sm]   = (shift.start || '00:00').split(':').map(Number)
+      const startMin   = sh * 60 + sm
+
+      // 11h rest against previous working day
+      if (lastWork) {
+        const daysDiff = (parseISODateLocal(dateStr) - parseISODateLocal(lastWork.dateStr)) / 86400000
+        const gapMin   = startMin + daysDiff * 1440 - lastWork.endMin
+        if (gapMin < 11 * 60 && rangeDates.includes(dateStr)) {
+          const gapH = Math.round(gapMin / 60 * 10) / 10
+          violations.push({ sev: 'error', emp, date: dateStr,
+            msg: `Ανάπαυση ${gapH}ω < 11ω (από ${lastWork.dateStr})` })
+        }
+      }
+
+      // Max shift hours + split gap
+      const s1 = toMinutes(shift.start)
+      let   e1 = toMinutes(shift.end)
+      if (s1 != null && e1 != null) {
+        if (e1 <= s1) e1 += 1440
+        let totalWorkMin = e1 - s1
+        if (shift.start2 && shift.end2) {
+          const s2 = toMinutes(shift.start2)
+          let   e2 = toMinutes(shift.end2)
+          if (s2 != null && e2 != null) {
+            if (e2 <= s2) e2 += 1440
+            const gapMin = s2 - toMinutes(shift.end)   // raw gap between parts
+            if (gapMin < 180 && rangeDates.includes(dateStr))
+              violations.push({ sev: 'error', emp, date: dateStr,
+                msg: `Κενό split βάρδιας ${Math.round(gapMin / 60 * 10) / 10}ω < 3ω` })
+            totalWorkMin += e2 - s2
+          }
+        }
+        if (totalWorkMin / 60 > maxShiftH && rangeDates.includes(dateStr))
+          violations.push({ sev: 'error', emp, date: dateStr,
+            msg: `Ώρες βάρδιας ${Math.round(totalWorkMin / 60 * 10) / 10}ω > max ${maxShiftH}ω` })
+      }
+
+      // Track last work end (use end of last segment; handle overnight)
+      const endKey = shift.end2 || shift.end
+      const refKey = shift.start2 || shift.start
+      const [eh, em] = (endKey || '00:00').split(':').map(Number)
+      const [rh, rm] = (refKey  || '00:00').split(':').map(Number)
+      let endMin = eh * 60 + em
+      if (endMin <= rh * 60 + rm) endMin += 1440
+      lastWork = { dateStr, endMin }
+    })
+
+    // ── 24h rest: one check per Mon–Sun week overlapping the range ───
+    const checkedWeeks = new Set()
+    rangeDates.forEach(dateStr => {
+      const weekKey = formatDate(getMonday(parseISODateLocal(dateStr)))
+      if (checkedWeeks.has(weekKey)) return
+      checkedWeeks.add(weekKey)
+      if (typeof validate24hRestInAny7Days === 'function') {
+        const chk = validate24hRestInAny7Days(emp.vat, weekKey)
+        if (!chk.ok)
+          violations.push({ sev: 'error', emp, date: weekKey,
+            msg: `Εβδ. ${weekKey}: δεν υπάρχει 24ω συνεχής ανάπαυση` })
+      }
+    })
+  })
+
+  _renderCheckResults(violations)
+}
+
+function _renderCheckResults(violations) {
+  const el = document.getElementById('chkResults')
+  if (!violations.length) {
+    el.innerHTML = '<div style="color:#16a34a;font-weight:600;padding:16px 0;font-size:14px">✅ Δεν βρέθηκαν παραβάσεις!</div>'
+    return
+  }
+
+  const errors   = violations.filter(v => v.sev === 'error')
+  const warnings = violations.filter(v => v.sev === 'warn')
+
+  let html = `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">
+    ${errors.length   ? `<span style="color:#dc2626;font-weight:600">🔴 ${errors.length} σφάλμα${errors.length !== 1 ? 'τα' : ''}</span>` : ''}
+    ${errors.length && warnings.length ? '&nbsp;&nbsp;' : ''}
+    ${warnings.length ? `<span style="color:#d97706;font-weight:600">🟡 ${warnings.length} προειδοποίηση${warnings.length !== 1 ? 'εις' : ''}</span>` : ''}
+  </div><div style="display:flex;flex-direction:column;gap:5px">`
+
+  violations.forEach(v => {
+    const bg     = v.sev === 'error' ? '#fef2f2' : '#fffbeb'
+    const border = v.sev === 'error' ? '#dc2626' : '#d97706'
+    const icon   = v.sev === 'error' ? '🔴' : '🟡'
+    const dateLbl = v.date ? `<span style="color:#6b7280;font-size:11px;margin-left:6px">${v.date}</span>` : ''
+    html += `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;
+                         background:${bg};border-radius:6px;border-left:3px solid ${border}">
+      <span style="flex-shrink:0">${icon}</span>
+      <div>
+        <span style="font-weight:600;font-size:12px">${employeeLabel(v.emp)}</span>${dateLbl}
+        <div style="font-size:12px;color:#374151;margin-top:2px">${v.msg}</div>
+      </div>
+    </div>`
+  })
+
+  el.innerHTML = html + '</div>'
+}
+
 // ─── Patch resetAllData to also reset viewStart ───────────────────────────
 // Use window assignment (not function declaration) to avoid hoisting issue.
 const _origResetAllData = typeof resetAllData === 'function' ? resetAllData : null
