@@ -191,11 +191,14 @@ function renderGrid() {
       const monthMissing = cardEntry?.guessed
         ? cardMissingTimeCount[`${emp.vat}_${dateStr.slice(0, 7)}`] || 0
         : 0
+      const isSelected = !isVirtual && selectedCells.some(
+        (c) => c.employeeId === String(emp.vat) && c.dateStr === dateStr
+      )
 
-      html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}"
+      html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}${isSelected ? ' cell-selected' : ''}"
                    data-vat="${emp.vat}"
                    data-date="${dateStr}"
-                   onclick="handleDayCellClick('${String(emp.vat)}','${dateStr}')">
+                   onclick="handleDayCellClick(event,'${String(emp.vat)}','${dateStr}')">
         ${renderShiftBar(shift, isHolSun, gapHours, prevGapH)}
         ${cardEntry ? renderCardBar(cardEntry, isIllegalCard, monthMissing) : ''}
       </td>`
@@ -373,9 +376,9 @@ function renderCardBar(entry, illegal = false, missingCount = 0) {
 }
 
 // ─── Cell click → shift modal ─────────────────────────────────────────────
-function handleDayCellClick(vat, dateStr) {
+function handleDayCellClick(event, vat, dateStr) {
   if (!data.employees.some((e) => String(e.vat) === String(vat))) return // virtual employee
-  openShiftModal(vat, dateStr, false)
+  handleCellClick(event, String(vat), dateStr, false)
 }
 
 // ─── renderAll shim (called by existing modules after save/change) ─────────
@@ -509,7 +512,20 @@ async function importCardFile(file) {
 
       const key = `${emp.vat}_${dateStr}`
       const maxH = window.MAX_SHIFT_HOURS || 13
-      const dailyH = guessEmployeeDailyHours(emp)
+      // Use scheduled shift duration when available; fall back to contracted daily hours
+      const schedShift = data.shifts[key]
+      let dailyH = guessEmployeeDailyHours(emp)
+      if (schedShift && isWorkingType(schedShift)) {
+        const sm = toMinutes(schedShift.start), emRaw = toMinutes(schedShift.end)
+        if (sm != null && emRaw != null) {
+          let dur = (emRaw <= sm ? emRaw + 1440 : emRaw) - sm
+          if (schedShift.start2 && schedShift.end2) {
+            const sm2 = toMinutes(schedShift.start2), em2Raw = toMinutes(schedShift.end2)
+            if (sm2 != null && em2Raw != null) dur += (em2Raw <= sm2 ? em2Raw + 1440 : em2Raw) - sm2
+          }
+          dailyH = dur / 60
+        }
+      }
       let inTime = row.in ? roundToHalfHour(row.in) : ''
       let outTime = row.out ? roundToHalfHour(row.out) : ''
       let guessedStart = false,

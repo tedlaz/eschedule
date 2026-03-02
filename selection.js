@@ -33,13 +33,13 @@ function toggleCellSelection(employeeId, dateStr) {
   }
 
   updateSelectionUI()
-  renderSchedule()
+  renderGrid()
 }
 
 function clearSelection() {
   selectedCells = []
   updateSelectionUI()
-  renderSchedule()
+  renderGrid()
 }
 
 function toggleMultiSelectMode() {
@@ -62,9 +62,9 @@ function updateSelectionUI() {
   if (selectedCells.length > 0) {
     container.style.display = 'flex'
     container.innerHTML = `
-      <span class="selection-count">${selectedCells.length} cell${selectedCells.length > 1 ? 's' : ''} selected</span>
-      <button class="btn-primary" onclick="openShiftModalForSelection()">Edit Selected</button>
-      <button class="btn-secondary" onclick="clearSelection()">Clear Selection</button>
+      <span class="selection-count">${selectedCells.length} κελί${selectedCells.length > 1 ? 'α' : ''} επιλεγμένα</span>
+      <button class="btn-primary" onclick="openShiftModalForSelection()">✏️ Επεξεργασία επιλεγμένων</button>
+      <button class="btn-secondary" onclick="clearSelection()">✕ Εκκαθάριση</button>
     `
   } else {
     container.style.display = 'none'
@@ -84,10 +84,10 @@ function openShiftModalForSelection() {
 
   // Update modal title to indicate multi-edit
   const modalTitle = modal.querySelector('h2')
-  modalTitle.textContent = `Edit ${selectedCells.length} Shifts`
+  modalTitle.textContent = `Επεξεργασία ${selectedCells.length} βαρδιών`
 
   // Set default values
-  document.getElementById('shiftType').value = 'working'
+  document.getElementById('shiftType').value = 'ΕΡΓ'
   const businessHours = getBusinessHoursForWeek()
   const firstDate = new Date(firstCell.dateStr)
   const dayOfWeek = firstDate.getDay()
@@ -97,7 +97,7 @@ function openShiftModalForSelection() {
   document.getElementById('shiftEnd').value = businessDay.close
   document.getElementById('hasSecondShift').checked = false
   const t2 = document.getElementById('shiftType2')
-  if (t2) t2.value = document.getElementById('shiftType').value === 'ΤΗΛ' ? 'ΤΗΛ' : 'ΕΡΓ'
+  if (t2) t2.value = 'ΕΡΓ'
   document.getElementById('shiftStart2').value = ''
   document.getElementById('shiftEnd2').value = ''
   toggleSecondShiftFields()

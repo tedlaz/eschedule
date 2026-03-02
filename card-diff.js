@@ -536,7 +536,20 @@ async function renderCardGrid() {
     }
     const d = normalizeCardDate(r.date)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return
-    const dailyH = guessEmployeeDailyHours(emp)
+    // Use scheduled shift duration when available; fall back to contracted daily hours
+    const schedShift = data.shifts[`${emp.vat}_${d}`]
+    let dailyH = guessEmployeeDailyHours(emp)
+    if (schedShift && isWorkingType(schedShift)) {
+      const sm = toMinutes(schedShift.start), emRaw = toMinutes(schedShift.end)
+      if (sm != null && emRaw != null) {
+        let dur = (emRaw <= sm ? emRaw + 1440 : emRaw) - sm
+        if (schedShift.start2 && schedShift.end2) {
+          const sm2 = toMinutes(schedShift.start2), em2Raw = toMinutes(schedShift.end2)
+          if (sm2 != null && em2Raw != null) dur += (em2Raw <= sm2 ? em2Raw + 1440 : em2Raw) - sm2
+        }
+        dailyH = dur / 60
+      }
+    }
     let inTime = r.in ? roundToHalfHour(r.in) : ''
     let outTime = r.out ? roundToHalfHour(r.out) : ''
     let guessedIn = false,
