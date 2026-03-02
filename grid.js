@@ -1,0 +1,903 @@
+// grid.js — Bar-style grid renderer for the simplified eSchedule UI
+// Uses the visual style of workRestModal (horizontal 24h bars per cell)
+// with the original grid's colour palette.
+
+// ─── View state ───────────────────────────────────────────────────────────
+let viewStart = null           // leftmost day shown (any day of week)
+let cardData = {}              // keyed "vat_YYYY-MM-DD" → {start, end, guessed}
+let cardVirtualEmployees = []  // temp employee records from card file
+
+// ─── Navigation ──────────────────────────────────────────────────────────
+function changeView(dayDelta) {
+  viewStart = new Date(viewStart)
+  viewStart.setDate(viewStart.getDate() + dayDelta)
+  // Keep currentWeekStart in sync (for functions that need it)
+  currentWeekStart = getMonday(new Date(viewStart))
+  _ensureRestForView()
+  saveData()
+  renderGrid()
+}
+
+function _ensureRestForView() {
+  const firstMonday = getMonday(new Date(viewStart))
+  ensureRestShiftsForWeek(firstMonday)
+  const lastDay = new Date(viewStart)
+  lastDay.setDate(lastDay.getDate() + 6)
+  const lastMonday = getMonday(lastDay)
+  if (formatDate(firstMonday) !== formatDate(lastMonday)) {
+    ensureRestShiftsForWeek(lastMonday)
+  }
+}
+
+// ─── Per-day business hours / holiday helpers ─────────────────────────────
+function getBizHoursForDay(date) {
+  const monday = getMonday(new Date(date))
+  const weekKey = formatDate(monday)
+  if (!data.weekBusinessHours[weekKey]) {
+    data.weekBusinessHours[weekKey] = JSON.parse(JSON.stringify(data.defaultBusinessHours))
+  }
+  const dow = (date.getDay() + 6) % 7  // 0=Mon … 6=Sun
+  return data.weekBusinessHours[weekKey][dow] || { open: '09:00', close: '17:00', closed: false }
+}
+
+function getHolidaysForDay(date) {
+  const monday = getMonday(new Date(date))
+  const weekKey = formatDate(monday)
+  if (!data.weekHolidays[weekKey]) {
+    data.weekHolidays[weekKey] = autoDetectGreekHolidaysForWeek(monday)
+  }
+  return data.weekHolidays[weekKey] || []
+}
+
+function isDateHoliday(date) {
+  const dow = (date.getDay() + 6) % 7
+  return getHolidaysForDay(date).includes(dow)
+}
+
+function isDateSundayOrHoliday(date) {
+  return date.getDay() === 0 || isDateHoliday(date)
+}
+
+function getHolidayNameForDate(date) {
+  if (typeof getHolidayName === 'function') return getHolidayName(formatDate(date))
+  return ''
+}
+
+// ─── Main render ─────────────────────────────────────────────────────────
+function renderGrid() {
+  const table = document.getElementById('scheduleTable')
+  if (!table || !viewStart) return
+
+  // Keep currentWeekStart aligned (required by ensureRestShiftsForWeek etc.)
+  currentWeekStart = getMonday(new Date(viewStart))
+
+  // Update date range display
+  const viewEnd = new Date(viewStart)
+  viewEnd.setDate(viewEnd.getDate() + 6)
+  const rangeEl = document.getElementById('viewRangeDisplay')
+  if (rangeEl) {
+    rangeEl.textContent = `${formatDisplayDate(viewStart)} – ${formatDisplayDate(viewEnd)}`
+  }
+
+  // Combined employee list: real + card-only virtual employees
+  const allEmployees = [...data.employees]
+  cardVirtualEmployees.forEach(ve => {
+    if (!allEmployees.some(e => String(e.vat) === String(ve.vat))) {
+      allEmployees.push(ve)
+    }
+  })
+
+  // ── Header ──
+  let html = '<thead><tr><th class="emp-col">Εργαζόμενος</th>'
+  for (let i = 0; i < 7; i++) {
+    const dayDate = new Date(viewStart)
+    dayDate.setDate(dayDate.getDate() + i)
+    const biz = getBizHoursForDay(dayDate)
+    const isHoliday = isDateHoliday(dayDate)
+    const isSunday = dayDate.getDay() === 0
+    const dow = (dayDate.getDay() + 6) % 7
+    let thCls = isSunday ? 'sunday-header' : ''
+    if (isHoliday) thCls = 'holiday-header'
+    const overnight = isOvernightRange(biz.open, biz.close)
+    const bizStr = `${biz.open}–${biz.close}${overnight ? '+1' : ''}`
+    const holidayName = isHoliday ? getHolidayNameForDate(dayDate) : ''
+    html += `<th class="${thCls}" title="${holidayName || (isHoliday ? '' : 'Κάντε κλικ για timeline')}"
+               onclick="openGridDayTimeline('${formatDate(dayDate)}')" style="cursor:pointer">
+      <div class="day-abbrev">${DAY_ABBREV[dow]}</div>
+      <div class="day-date">${dayDate.getDate()}/${dayDate.getMonth() + 1}</div>
+      ${holidayName ? `<div class="holiday-name-hdr">${holidayName}</div>` : ''}
+      <div class="biz-hours-hdr">${bizStr}</div>
+      ${(isHoliday || isSunday) ? '<div class="premium-badge">+75%</div>' : ''}
+    </th>`
+  }
+  html += '</tr></thead><tbody>'
+
+  // ── Employee rows ──
+  if (allEmployees.length === 0) {
+    html += '<tr><td colspan="8" class="empty-grid">Δεν υπάρχουν εργαζόμενοι.<br>Κάντε κλικ στο «👥 Εργαζόμενοι» για να προσθέσετε.</td></tr>'
+  }
+
+  allEmployees.forEach(emp => {
+    const isVirtual = !!emp._virtual
+    const empMonday = getMonday(new Date(viewStart))
+    const weekHours = isVirtual ? 0 : calculateWeekHours(emp.vat, empMonday)
+    const weekCost  = isVirtual ? { totalCost: 0, sundayHolidayHours: 0, nightHours: 0 }
+                                : calculateWeekCost(emp.vat, empMonday)
+    const targetHours = isVirtual ? 0 : Number(emp.weekWorkingHours || 40)
+    const hoursPercent = targetHours ? Math.min((weekHours / targetHours) * 100, 100) : 0
+    const hoursClass = weekHours < targetHours ? 'danger' : weekHours > targetHours ? 'warning' : ''
+
+    const payLabel = isVirtual ? '📋' : (emp.payType === 'monthly' ? 'Μ' : emp.payType === 'daily' ? 'Η' : 'Ω')
+    const payBg    = isVirtual ? '#fef3c7' : (emp.payType === 'monthly' ? '#dbeafe' : emp.payType === 'daily' ? '#d1fae5' : '#dcfce7')
+    const payColor = isVirtual ? '#92400e' : (emp.payType === 'monthly' ? '#1e40af' : emp.payType === 'daily' ? '#065f46' : '#166534')
+
+    html += `<tr class="employee-row">
+      <td class="emp-name-cell"
+          onclick="${isVirtual ? '' : `openEmployeeModal('${String(emp.vat)}')`}"
+          ${isVirtual ? '' : 'style="cursor:pointer"'}>
+        <div class="emp-name-row">
+          <span class="emp-name">${employeeLabel(emp)}</span>
+          <span class="pay-badge" style="background:${payBg};color:${payColor}" title="${emp.payType || ''}">${payLabel}</span>
+          ${!isVirtual ? `<span class="del-emp" onclick="event.stopPropagation();deleteEmployee('${String(emp.vat)}')" title="Διαγραφή">×</span>` : ''}
+        </div>
+        ${!isVirtual && targetHours ? `
+        <div class="week-stats">${weekHours}h / ${targetHours}h
+          <span class="week-cost">€${weekCost.totalCost}</span>
+        </div>
+        <div class="hours-bar-wrap">
+          <div class="hours-bar-fill ${hoursClass}" style="width:${hoursPercent.toFixed(1)}%"></div>
+        </div>` : ''}
+      </td>`
+
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(viewStart)
+      dayDate.setDate(dayDate.getDate() + i)
+      const dateStr = formatDate(dayDate)
+      const shift = data.shifts[`${emp.vat}_${dateStr}`]
+      const cardEntry = cardData[`${emp.vat}_${dateStr}`]
+      const isHolSun = isDateSundayOrHoliday(dayDate)
+      const isGapCell  = !isVirtual && (!shift || shift.type === 'AN')
+      const isWorkCell = !isVirtual && shift && isWorkingType(shift)
+      const gapHours = isGapCell  ? getInterShiftGapHours(emp.vat, dateStr) : null
+      // Only show prevGapH on work cells when the previous day was also a work day
+      // (no adjacent gap cell already showing the same interval)
+      let prevGapH = null
+      if (isWorkCell) {
+        const prevDate = new Date(dayDate)
+        prevDate.setDate(prevDate.getDate() - 1)
+        const prevShift = data.shifts[`${emp.vat}_${formatDate(prevDate)}`]
+        if (prevShift && isWorkingType(prevShift)) {
+          prevGapH = getGapToPrevShift(emp.vat, dateStr, shift.start)
+        }
+      }
+
+      html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}"
+                   data-vat="${emp.vat}"
+                   data-date="${dateStr}"
+                   onclick="handleDayCellClick('${String(emp.vat)}','${dateStr}')">
+        ${renderShiftBar(shift, isHolSun, gapHours, prevGapH)}
+        ${cardEntry ? renderCardBar(cardEntry) : ''}
+      </td>`
+    }
+    html += '</tr>'
+  })
+
+  html += '</tbody>'
+  table.innerHTML = html
+}
+
+// ─── Inter-shift rest gap ─────────────────────────────────────────────────
+// Returns the gap in hours from the previous work shift end to shiftStart on
+// dateStr.  Used to annotate the pre-shift area of work-day bars.
+function getGapToPrevShift(vat, dateStr, shiftStart) {
+  const date = parseISODateLocal(dateStr)
+  const [sh, sm] = shiftStart.split(':').map(Number)
+  const startMin = sh * 60 + sm   // minutes from midnight of dateStr
+
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(date)
+    d.setDate(d.getDate() - i)
+    const s = data.shifts[`${vat}_${formatDate(d)}`]
+    if (s && isWorkingType(s) && s.end) {
+      const [eh, em] = s.end.split(':').map(Number)
+      const prevEndMin = -(i * 1440) + eh * 60 + em
+      return Math.round(((startMin - prevEndMin) / 60) * 10) / 10
+    }
+  }
+  return null
+}
+
+// Returns total rest hours between the previous work shift end and the next
+// work shift start, measured through the given date.  Returns null if either
+// side cannot be found within 14 days.
+function getInterShiftGapHours(vat, dateStr) {
+  const date = parseISODateLocal(dateStr)
+
+  // Minutes relative to midnight of dateStr (negative = before, positive = after)
+  let prevEndMin = null
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(date)
+    d.setDate(d.getDate() - i)
+    const s = data.shifts[`${vat}_${formatDate(d)}`]
+    if (s && isWorkingType(s) && s.end) {
+      const [h, m] = s.end.split(':').map(Number)
+      prevEndMin = -(i * 1440) + h * 60 + m
+      break
+    }
+  }
+
+  let nextStartMin = null
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(date)
+    d.setDate(d.getDate() + i)
+    const s = data.shifts[`${vat}_${formatDate(d)}`]
+    if (s && isWorkingType(s) && s.start) {
+      const [h, m] = s.start.split(':').map(Number)
+      nextStartMin = i * 1440 + h * 60 + m
+      break
+    }
+  }
+
+  if (prevEndMin === null || nextStartMin === null) return null
+  const gapH = (nextStartMin - prevEndMin) / 60
+  return Math.round(gapH * 10) / 10
+}
+
+// ─── Bar helpers ─────────────────────────────────────────────────────────
+function pct(minutes) {
+  return ((minutes / 1440) * 100).toFixed(3) + '%'
+}
+
+function minToStr(minutes) {
+  const h = Math.floor(minutes / 60) % 24
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+// ─── Schedule bar ─────────────────────────────────────────────────────────
+function renderShiftBar(shift, isHolSun, gapHours, prevGapH) {
+  const gapLbl = gapHours != null
+    ? `<span class="bar-gap-lbl">${gapHours}ω</span>` : ''
+
+  if (!shift) {
+    return `<div class="bar-wrap"><div class="bar bar-empty">${gapLbl}</div></div>`
+  }
+  if (isWorkingType(shift)) {
+    return _buildWorkBar(shift, isHolSun, prevGapH)
+  }
+  if (shift.type === 'AN') {
+    return `<div class="bar-wrap"><div class="bar bar-rest">${gapLbl || '<span class="bar-lbl">ΡΕΠΟ</span>'}</div></div>`
+  }
+  if (isNonWorkingType(shift)) {
+    return '<div class="bar-wrap"><div class="bar bar-me"><span class="bar-lbl">ΜΕ</span></div></div>'
+  }
+  // Absence
+  const paid = isPaidAbsenceType(shift.type)
+  const cls  = paid ? 'bar-paid' : 'bar-unpaid'
+  return `<div class="bar-wrap"><div class="bar ${cls}"><span class="bar-lbl">${shift.type}</span></div></div>`
+}
+
+function _buildWorkBar(shift, isHolSun, prevGapH) {
+  const segs = []
+  const addSeg = (start, end, type) => {
+    const sm = toMinutes(start)
+    let   em = toMinutes(end)
+    if (sm === null || em === null) return
+    if (em <= sm) em += 1440
+    const cls = isHolSun ? 'seg-holiday' : (type === 'ΤΗΛ' ? 'seg-tel' : 'seg-work')
+    segs.push({ sm, em, cls, title: `${start}–${end}` })
+  }
+  addSeg(shift.start, shift.end, shift.type)
+  if (shift.start2 && shift.end2) addSeg(shift.start2, shift.end2, shift.type2 || shift.type)
+  if (!segs.length) return '<div class="bar-wrap"><div class="bar bar-empty"></div></div>'
+
+  segs.sort((a, b) => a.sm - b.sm)
+
+  let totalWorkMin = segs.reduce((s, x) => s + (x.em - x.sm), 0)
+  const totalHours = totalWorkMin / 60
+  const hoursLabel = totalHours >= 1 ? `${Math.round(totalHours * 10) / 10}ω` : ''
+
+  let segHtml = ''
+
+  // Show gap from previous shift end to start of today's first segment
+  const firstSm = segs[0].sm
+  if (prevGapH != null && firstSm > 0) {
+    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(firstSm)}" title="από προηγ. βάρδια: ${prevGapH}ω"><span class="gap-lbl">${prevGapH}ω</span></div>`
+  }
+
+  segs.forEach((s, idx) => {
+    // Show gap between two work segments (split shift)
+    if (idx > 0) {
+      const gapMin = s.sm - segs[idx - 1].em
+      if (gapMin > 0) {
+        const gapH = gapMin / 60
+        const gapLabel = gapH >= 1 ? `${Math.round(gapH * 10) / 10}ω` : `${gapMin}'`
+        segHtml += `<div class="seg seg-gap" style="left:${pct(segs[idx-1].em)};width:${pct(gapMin)}" title="${minToStr(segs[idx-1].em)}–${minToStr(s.sm)}"><span class="gap-lbl">${gapLabel}</span></div>`
+      }
+    }
+    const lbl = (idx === 0 && hoursLabel) ? `<span class="seg-lbl">${hoursLabel}</span>` : ''
+    segHtml += `<div class="seg ${s.cls}" style="left:${pct(s.sm)};width:${pct(s.em - s.sm)}" title="${s.title}">${lbl}</div>`
+  })
+
+  return `<div class="bar-wrap"><div class="bar bar-work">${segHtml}</div></div>`
+}
+
+// ─── Card bar ─────────────────────────────────────────────────────────────
+function renderCardBar(entry) {
+  if (!entry) return ''
+  const sm = toMinutes(entry.start)
+  let   em = toMinutes(entry.end)
+  if (sm === null || em === null) return ''
+  if (em <= sm) em += 1440
+
+  const hours = (em - sm) / 60
+  const hoursLabel = hours >= 1 ? `<span class="seg-lbl">${Math.round(hours * 10) / 10}ω</span>` : ''
+  const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
+  const title = `📋 ${entry.start}–${entry.end}${guessNote}`
+  // Guessed entries flash in the main grid; all card bars use the striped amber style
+  const segCls = `seg seg-card${entry.guessed ? ' seg-card-flash' : ''}`
+
+  const segHtml = `<div class="${segCls}" style="left:${pct(sm)};width:${pct(em - sm)}" title="${title}">${hoursLabel}</div>`
+
+  return `<div class="bar-wrap card-bar-wrap"><div class="bar bar-card">${segHtml}</div></div>`
+}
+
+// ─── Cell click → shift modal ─────────────────────────────────────────────
+function handleDayCellClick(vat, dateStr) {
+  if (!data.employees.some(e => String(e.vat) === String(vat))) return  // virtual employee
+  openShiftModal(vat, dateStr, false)
+}
+
+// ─── renderAll shim (called by existing modules after save/change) ─────────
+function renderAll() {
+  renderGrid()
+}
+
+// ─── Card import ─────────────────────────────────────────────────────────
+function clearCardData() {
+  cardData = {}
+  cardVirtualEmployees = []
+  const btn = document.getElementById('clearCardBtn')
+  if (btn) btn.style.display = 'none'
+  renderGrid()
+}
+
+async function importCardFile(file) {
+  try {
+    const rows = await readCardFileRows(file)
+    if (!rows.length) { alert('Δεν βρέθηκαν εγγραφές στο αρχείο.'); return 0 }
+
+    cardData = {}
+    cardVirtualEmployees = []
+
+    rows.forEach(row => {
+      const dateStr = normalizeCardDate(row.date)
+      if (!dateStr) return
+
+      // Find employee by VAT or nickname
+      let emp = data.employees.find(e =>
+        String(e.vat) === String(row.employee) ||
+        (e.nickName || '').toLowerCase() === String(row.employee).toLowerCase()
+      )
+
+      if (!emp) {
+        // Use or create virtual employee
+        const displayName = [row.surname, row.firstName].filter(Boolean).join(' ').trim() || row.employee
+        emp = cardVirtualEmployees.find(ve => String(ve.vat) === String(row.employee))
+        if (!emp) {
+          emp = {
+            vat: String(row.employee),
+            nickName: displayName,
+            payType: 'hourly', hourlyRate: 0,
+            weekWorkingHours: 40, weekWorkingDays: 5,
+            defaultRestDays: [5, 6], _virtual: true
+          }
+          cardVirtualEmployees.push(emp)
+        }
+      }
+
+      const key = `${emp.vat}_${dateStr}`
+      const maxH   = window.MAX_SHIFT_HOURS || 13
+      const dailyH = guessEmployeeDailyHours(emp)
+      let inTime  = row.in  ? roundToHalfHour(row.in)  : ''
+      let outTime = row.out ? roundToHalfHour(row.out) : ''
+      let guessedStart = false, guessedEnd = false
+      if (inTime && !outTime) {
+        outTime = roundToHalfHour(addHoursToTime(inTime, Math.min(dailyH, maxH)))
+        guessedEnd = true
+      } else if (!inTime && outTime) {
+        inTime = roundToHalfHour(subtractHoursFromTime(outTime, Math.min(dailyH, maxH)))
+        guessedStart = true
+      }
+      if (!inTime || !outTime) return  // both still missing — skip
+      cardData[key] = { start: inTime, end: outTime, guessedStart, guessedEnd, guessed: guessedStart || guessedEnd }
+    })
+
+    renderGrid()
+    const btn = document.getElementById('clearCardBtn')
+    if (btn) btn.style.display = 'inline-block'
+    return rows.length
+  } catch (e) {
+    alert('Σφάλμα ανάγνωσης αρχείου: ' + e.message)
+    return 0
+  }
+}
+
+// ─── Company modal ────────────────────────────────────────────────────────
+function openCompanyModal() {
+  const modal = document.getElementById('companyModal')
+  if (!modal) return
+  document.getElementById('cmpName').value = data.companyName || ''
+  // Populate business hours rows
+  const tbody = document.getElementById('bizHoursBody')
+  let rows = ''
+  for (let d = 0; d < 7; d++) {
+    const bh = data.defaultBusinessHours[d] || { open: '09:00', close: '17:00', closed: false }
+    rows += `<tr>
+      <td>${DAYS[d]}</td>
+      <td><input type="time" id="bhOpen${d}" value="${bh.open}"></td>
+      <td><input type="time" id="bhClose${d}" value="${bh.close}"></td>
+      <td><input type="checkbox" id="bhClosed${d}" ${bh.closed ? 'checked' : ''}></td>
+    </tr>`
+  }
+  tbody.innerHTML = rows
+  modal.classList.add('active')
+}
+
+function saveCompany() {
+  data.companyName = document.getElementById('cmpName').value.trim()
+  for (let d = 0; d < 7; d++) {
+    data.defaultBusinessHours[d] = {
+      open:   document.getElementById(`bhOpen${d}`)?.value || '09:00',
+      close:  document.getElementById(`bhClose${d}`)?.value || '17:00',
+      closed: document.getElementById(`bhClosed${d}`)?.checked || false,
+    }
+  }
+  // Reset cached weekBusinessHours so they pick up new defaults
+  data.weekBusinessHours = {}
+  saveData()
+  closeModal('companyModal')
+  renderGrid()
+}
+
+// ─── Employee list modal ──────────────────────────────────────────────────
+function openEmployeeListModal() {
+  renderEmployeeList()
+  document.getElementById('employeeListModal').classList.add('active')
+}
+
+function renderEmployeeList() {
+  const list = document.getElementById('empListBody')
+  if (!list) return
+  if (!data.employees.length) {
+    list.innerHTML = '<p style="color:#999;text-align:center;padding:16px">Δεν υπάρχουν εργαζόμενοι</p>'
+    return
+  }
+  list.innerHTML = data.employees.map(emp => {
+    const payLabel = emp.payType === 'monthly' ? 'Μηνιαίος' : emp.payType === 'daily' ? 'Ημερήσιος' : 'Ωρομίσθιος'
+    return `<div class="emp-list-item">
+      <div>
+        <strong>${employeeLabel(emp)}</strong>
+        <span class="pay-badge" style="margin-left:6px;font-size:11px;padding:2px 6px;border-radius:999px;background:#e0e7ff;color:#3730a3">${payLabel}</span>
+        <span style="color:#888;font-size:12px;margin-left:6px">ΑΦΜ: ${emp.vat}</span>
+      </div>
+      <div>
+        <button class="btn-sm btn-secondary" onclick="closeModal('employeeListModal');openEmployeeModal('${emp.vat}')">✏ Επεξεργασία</button>
+        <button class="btn-sm btn-danger" onclick="deleteEmployee('${emp.vat}')">× Διαγραφή</button>
+      </div>
+    </div>`
+  }).join('')
+}
+
+// ─── Card import modal ────────────────────────────────────────────────────
+function openCardImportModal() {
+  document.getElementById('cardImportModal').classList.add('active')
+}
+
+async function handleCardFileSelect(input) {
+  const file = input.files[0]
+  if (!file) return
+  document.getElementById('cardImportStatus').textContent = 'Φόρτωση…'
+  const count = await importCardFile(file)
+  document.getElementById('cardImportStatus').textContent =
+    count ? `✓ ${count} εγγραφές φορτώθηκαν` : 'Δεν βρέθηκαν εγγραφές'
+  input.value = ''
+}
+
+// ─── Generic modal close ──────────────────────────────────────────────────
+function closeModal(id) {
+  const el = document.getElementById(id)
+  if (el) el.classList.remove('active')
+}
+
+// ─── Card time correction ─────────────────────────────────────────────────
+let _editingCardKey = null
+
+function openCardTimeEdit(key) {
+  _editingCardKey = key
+  const entry = cardData[key] || {}
+  document.getElementById('cardEditIn').value  = entry.start || ''
+  document.getElementById('cardEditOut').value = entry.end   || ''
+  document.getElementById('cardEditModal').classList.add('active')
+}
+
+function saveCardTimeEdit() {
+  if (!_editingCardKey) return
+  const inVal  = document.getElementById('cardEditIn').value
+  const outVal = document.getElementById('cardEditOut').value
+  if (!inVal || !outVal) return
+  cardData[_editingCardKey] = { start: inVal, end: outVal, guessedStart: false, guessedEnd: false, guessed: false }
+  closeModal('cardEditModal')
+  renderTimeline()
+  renderGrid()
+}
+
+// ─── Override renderSchedule so timeline drag-saves redraw the bar grid ───
+function renderSchedule() {
+  renderGrid()
+}
+
+// ─── Timeline integration ─────────────────────────────────────────────────
+
+// Wrap timeline.js's renderTimeline so card data is always appended.
+// IMPORTANT: use window assignment (not function declaration) to avoid hoisting
+// shadowing the timeline.js version before we can capture it.
+const _origRenderTimeline = typeof renderTimeline === 'function' ? renderTimeline : null
+window.renderTimeline = function() {
+  if (_origRenderTimeline) _origRenderTimeline()
+  // Replace day-selector buttons with simple arrow navigation
+  _replaceTimelineDaySelector()
+  // Inject card data for the displayed day
+  const dayDate = new Date(currentWeekStart)
+  dayDate.setDate(dayDate.getDate() + (selectedTimelineDay || 0))
+  _appendCardDataToTimeline(formatDate(dayDate))
+}
+
+function _replaceTimelineDaySelector() {
+  const sel = document.getElementById('timelineDaySelector')
+  if (!sel) return
+  const dayDate = new Date(currentWeekStart)
+  dayDate.setDate(dayDate.getDate() + (selectedTimelineDay || 0))
+  sel.innerHTML = `
+    <button class="timeline-day-btn" onclick="_timelineNavDay(-1)"
+            style="font-size:16px;padding:4px 10px">◀</button>
+    <button class="timeline-day-btn" onclick="_timelineNavDay(1)"
+            style="font-size:16px;padding:4px 10px">▶</button>`
+}
+
+// Navigate timeline by one day, crossing week boundaries freely
+function _timelineNavDay(delta) {
+  let day = (selectedTimelineDay || 0) + delta
+  if (day < 0) {
+    currentWeekStart = new Date(currentWeekStart)
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7)
+    day = 6
+  } else if (day > 6) {
+    currentWeekStart = new Date(currentWeekStart)
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7)
+    day = 0
+  }
+  selectedTimelineDay = day
+  renderTimeline()
+}
+
+// Open the timeline modal for a date string (YYYY-MM-DD) clicked from the header
+function openGridDayTimeline(dateStr) {
+  const d = parseISODateLocal(dateStr)
+  currentWeekStart = getMonday(new Date(d))
+  // 0=Mon … 6=Sun mapping used by timeline.js
+  const jsDay = d.getDay()
+  selectedTimelineDay = jsDay === 0 ? 6 : jsDay - 1
+  renderTimeline()
+  document.getElementById('timelineModal').classList.add('active')
+}
+
+// Append amber card-data rows directly after each matching employee schedule row
+function _appendCardDataToTimeline(dateStr) {
+  const grid = document.getElementById('timelineGrid')
+  if (!grid) return
+
+  // Remove previously injected card rows
+  grid.querySelectorAll('[data-card-row]').forEach(el => el.remove())
+
+  if (!Object.keys(cardData).length) return
+
+  // Read hour count from the header labels (needed for positioning)
+  const hourLabels = grid.querySelectorAll('.timeline-hour-label')
+  if (!hourLabels.length) return
+  const hoursCount = hourLabels.length
+
+  const allEmps = [...data.employees, ...cardVirtualEmployees]
+
+  // Walk each rendered schedule row and inject a card row immediately after it
+  grid.querySelectorAll('.timeline-employee-row:not([data-card-row])').forEach(schedRow => {
+    const shiftBar = schedRow.querySelector('.timeline-shift-bar')
+    if (!shiftBar) return
+
+    const vat       = shiftBar.dataset.employeeId
+    const rowDate   = shiftBar.dataset.date || dateStr
+    const hoursStart = parseInt(shiftBar.dataset.hoursStart, 10)
+
+    const entry = cardData[`${vat}_${rowDate}`]
+    if (!entry || !entry.start || !entry.end) return
+
+    const emp = allEmps.find(e => String(e.vat) === String(vat))
+
+    const smMin = toMinutes(entry.start)
+    let   emMin = toMinutes(entry.end)
+    if (smMin === null || emMin === null) return
+    if (emMin <= smMin) emMin += 24 * 60
+
+    const smH      = smMin / 60
+    const emH      = emMin / 60
+    const leftPct  = Math.max(0, ((smH - hoursStart) / hoursCount) * 100)
+    const widthPct = Math.min(100 - leftPct, ((emH - smH) / hoursCount) * 100)
+
+    // Card row — same structure as .timeline-employee-row
+    const row = document.createElement('div')
+    row.className = 'timeline-employee-row'
+    row.setAttribute('data-card-row', '1')
+
+    // Name cell — just a small "card" badge, no repeated name
+    // margin-top: -2px cancels the grid gap so it visually attaches to the row above
+    const nameDiv = document.createElement('div')
+    nameDiv.className = 'timeline-employee-name'
+    nameDiv.style.cssText = 'font-style:italic;color:#92400e;background:#fffbeb;font-size:11px;justify-content:flex-end;margin-top:-2px'
+    nameDiv.textContent = '📋 κάρτα'
+
+    // Hours container — copy cell classes from the schedule row so backgrounds match
+    const hoursDiv = document.createElement('div')
+    hoursDiv.className = 'timeline-employee-hours'
+    hoursDiv.style.cssText = 'position:relative;margin-top:-2px'
+    const schedCells = schedRow.querySelectorAll('.timeline-hour-cell')
+    for (let i = 0; i < hoursCount; i++) {
+      const cell = document.createElement('div')
+      cell.className = schedCells[i] ? schedCells[i].className : 'timeline-hour-cell'
+      hoursDiv.appendChild(cell)
+    }
+
+    // Amber bar — same class for consistent height/radius
+    const bar = document.createElement('div')
+    bar.className = 'timeline-shift-bar'
+    const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
+    const barBg = entry.guessed
+      ? 'repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px)'
+      : 'linear-gradient(135deg,#fbbf24,#d97706)'
+    bar.style.cssText = `left:${leftPct.toFixed(2)}%;width:${Math.max(widthPct, 2).toFixed(2)}%;background:${barBg};cursor:pointer`
+    bar.title = `📋 ${entry.start}–${entry.end}${guessNote}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
+    bar.setAttribute('data-card-key', `${vat}_${rowDate}`)
+    bar.setAttribute('data-hours-start', hoursStart)
+    bar.setAttribute('data-hours-count', hoursCount)
+    // Click on bar body opens manual edit; drag handles handle dragging
+    bar.onclick = (e) => { if (!e.target.dataset.handle) openCardTimeEdit(`${vat}_${rowDate}`) }
+
+    const lbl = document.createElement('div')
+    lbl.className = 'time-label'
+    lbl.textContent = `${entry.start} - ${entry.end}${entry.guessed ? ' ?' : ''}`
+    bar.appendChild(lbl)
+
+    // Add drag handle only on the guessed side
+    if (entry.guessedStart) {
+      const h = document.createElement('div')
+      h.className = 'drag-handle left'
+      h.dataset.handle = 'left'
+      bar.appendChild(h)
+    }
+    if (entry.guessedEnd) {
+      const h = document.createElement('div')
+      h.className = 'drag-handle right'
+      h.dataset.handle = 'right'
+      bar.appendChild(h)
+    }
+
+    hoursDiv.appendChild(bar)
+
+    row.appendChild(nameDiv)
+    row.appendChild(hoursDiv)
+
+    // Insert directly after the matching schedule row
+    schedRow.insertAdjacentElement('afterend', row)
+  })
+
+  // ── Standalone rows for employees with card data but no schedule row ──
+  // Collect VATs that already got a card row injected above
+  const renderedVats = new Set()
+  grid.querySelectorAll('.timeline-shift-bar[data-employee-id]').forEach(bar => {
+    renderedVats.add(bar.dataset.employeeId)
+  })
+
+  // Grid parameters from any existing bar; fall back to defaults
+  let hoursStart = 6
+  const anyBar = grid.querySelector('.timeline-shift-bar[data-hours-start]')
+  if (anyBar) hoursStart = parseInt(anyBar.dataset.hoursStart, 10)
+
+  // Reference hour cells for copying business/night classes
+  const refCells = grid.querySelectorAll('.timeline-employee-row:not([data-card-row]) .timeline-hour-cell')
+
+  Object.keys(cardData).forEach(key => {
+    if (!key.endsWith('_' + dateStr)) return
+    const vat = key.slice(0, -(dateStr.length + 1))
+    if (renderedVats.has(String(vat))) return  // already shown paired under a schedule row
+
+    const entry = cardData[key]
+    if (!entry || !entry.start || !entry.end) return
+
+    const emp = allEmps.find(e => String(e.vat) === String(vat))
+    const empName = emp
+      ? (emp.nickName || [emp.surname, emp.firstName].filter(Boolean).join(' ').trim() || String(vat))
+      : String(vat)
+
+    const smMin = toMinutes(entry.start)
+    let   emMin = toMinutes(entry.end)
+    if (smMin === null || emMin === null) return
+    if (emMin <= smMin) emMin += 24 * 60
+
+    const smH     = smMin / 60
+    const emH     = emMin / 60
+    const leftPct  = Math.max(0, ((smH - hoursStart) / hoursCount) * 100)
+    const widthPct = Math.min(100 - leftPct, ((emH - smH) / hoursCount) * 100)
+
+    const row = document.createElement('div')
+    row.className = 'timeline-employee-row'
+    row.setAttribute('data-card-row', '1')
+
+    const nameDiv = document.createElement('div')
+    nameDiv.className = 'timeline-employee-name'
+    nameDiv.style.cssText = 'font-style:italic;color:#92400e;background:#fffbeb;font-size:11px'
+    nameDiv.textContent = `📋 ${empName}`
+
+    const hoursDiv = document.createElement('div')
+    hoursDiv.className = 'timeline-employee-hours'
+    hoursDiv.style.cssText = 'position:relative'
+    for (let i = 0; i < hoursCount; i++) {
+      const cell = document.createElement('div')
+      cell.className = refCells[i] ? refCells[i].className : 'timeline-hour-cell'
+      hoursDiv.appendChild(cell)
+    }
+
+    const bar = document.createElement('div')
+    bar.className = 'timeline-shift-bar'
+    const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
+    const barBg = entry.guessed
+      ? 'repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px)'
+      : 'linear-gradient(135deg,#fbbf24,#d97706)'
+    bar.style.cssText = `left:${leftPct.toFixed(2)}%;width:${Math.max(widthPct, 2).toFixed(2)}%;background:${barBg};cursor:pointer`
+    bar.title = `📋 ${entry.start}–${entry.end}${guessNote}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
+    bar.setAttribute('data-card-key', key)
+    bar.setAttribute('data-hours-start', hoursStart)
+    bar.setAttribute('data-hours-count', hoursCount)
+    bar.onclick = (e) => { if (!e.target.dataset.handle) openCardTimeEdit(key) }
+
+    const lbl = document.createElement('div')
+    lbl.className = 'time-label'
+    lbl.textContent = `${entry.start} - ${entry.end}${entry.guessed ? ' ?' : ''}`
+    bar.appendChild(lbl)
+
+    if (entry.guessedStart) {
+      const h = document.createElement('div')
+      h.className = 'drag-handle left'
+      h.dataset.handle = 'left'
+      bar.appendChild(h)
+    }
+    if (entry.guessedEnd) {
+      const h = document.createElement('div')
+      h.className = 'drag-handle right'
+      h.dataset.handle = 'right'
+      bar.appendChild(h)
+    }
+
+    hoursDiv.appendChild(bar)
+    row.appendChild(nameDiv)
+    row.appendChild(hoursDiv)
+    grid.appendChild(row)
+  })
+
+  // Attach drag handlers to all card bars that have guessed sides
+  initCardDragHandlers()
+}
+
+// ─── Card bar drag (guessed-side only) ────────────────────────────────────
+let _cardDragState = null
+
+function initCardDragHandlers() {
+  document.querySelectorAll('.timeline-shift-bar[data-card-key]').forEach(bar => {
+    // Remove any previous listener to avoid duplicates, then re-add
+    bar.removeEventListener('mousedown', _cardBarMouseDown)
+    bar.addEventListener('mousedown', _cardBarMouseDown)
+  })
+}
+
+function _cardBarMouseDown(e) {
+  const handle = e.target.dataset.handle
+  if (!handle) return  // only drag handles start a drag
+  e.preventDefault()
+  e.stopPropagation()
+
+  const bar = e.target.closest('.timeline-shift-bar')
+  if (!bar) return
+  const container = bar.parentElement
+  const containerRect = container.getBoundingClientRect()
+  const cardKey   = bar.dataset.cardKey
+  const hoursStart = parseInt(bar.dataset.hoursStart, 10)
+  const hoursCount = parseInt(bar.dataset.hoursCount, 10)
+  const entry = cardData[cardKey]
+  if (!entry) return
+
+  bar.classList.add('dragging')
+  _cardDragState = {
+    bar, container, containerRect, handle,
+    cardKey, hoursStart, hoursCount,
+    initialStart: entry.start,
+    initialEnd:   entry.end,
+    startX: e.clientX,
+  }
+  document.addEventListener('mousemove', _cardBarMouseMove)
+  document.addEventListener('mouseup',   _cardBarMouseUp)
+}
+
+function _cardBarMouseMove(e) {
+  if (!_cardDragState) return
+  const { bar, containerRect, handle, hoursStart, hoursCount, initialStart, initialEnd } = _cardDragState
+
+  const deltaHours = ((e.clientX - _cardDragState.startX) / containerRect.width) * hoursCount
+  const [sh, sm] = initialStart.split(':').map(Number)
+  const [eh, em] = initialEnd.split(':').map(Number)
+  let s = sh + sm / 60
+  let en = eh + em / 60
+  if (en <= s) en += 24
+
+  if (handle === 'left') {
+    s = Math.max(hoursStart, Math.min(s + deltaHours, en - 0.25))
+  } else {
+    en = Math.max(s + 0.25, Math.min(en + deltaHours, hoursStart + hoursCount))
+  }
+  s  = roundToQuarter(s)
+  en = roundToQuarter(en)
+
+  const startOff = ((s  - hoursStart) / hoursCount) * 100
+  const width    = ((en - s)           / hoursCount) * 100
+  bar.style.left  = `${startOff}%`
+  bar.style.width = `${width}%`
+
+  const newStartStr = formatTimeFromHours(s)
+  const newEndStr   = formatTimeFromHours(en)
+  const lbl = bar.querySelector('.time-label')
+  if (lbl) lbl.textContent = `${newStartStr} - ${newEndStr}`
+
+  _cardDragState.newStart = newStartStr
+  _cardDragState.newEnd   = newEndStr
+}
+
+function _cardBarMouseUp() {
+  if (!_cardDragState) return
+  const { bar, cardKey, handle, newStart, newEnd } = _cardDragState
+  bar.classList.remove('dragging')
+
+  if (newStart && newEnd) {
+    const entry = cardData[cardKey] || {}
+    // Keep guessed flags unchanged — the bar stays striped and draggable.
+    // Flags are only cleared when the user explicitly saves via the edit modal.
+    cardData[cardKey] = {
+      start: newStart, end: newEnd,
+      guessedStart: entry.guessedStart,
+      guessedEnd:   entry.guessedEnd,
+      guessed:      entry.guessed,
+    }
+    renderTimeline()
+    renderGrid()
+  }
+
+  _cardDragState = null
+  document.removeEventListener('mousemove', _cardBarMouseMove)
+  document.removeEventListener('mouseup',   _cardBarMouseUp)
+}
+
+// ─── Patch resetAllData to also reset viewStart ───────────────────────────
+// Use window assignment (not function declaration) to avoid hoisting issue.
+const _origResetAllData = typeof resetAllData === 'function' ? resetAllData : null
+window.resetAllData = async function() {
+  if (_origResetAllData) await _origResetAllData()
+  viewStart = getMonday(new Date())
+  currentWeekStart = new Date(viewStart)
+  renderGrid()
+}

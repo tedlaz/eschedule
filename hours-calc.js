@@ -194,6 +194,20 @@ function calculateWeekCost(employeeId, weekStart) {
   const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
   if (!emp) return { totalHours: 0, effectiveHours: 0, totalCost: 0, sundayHolidayHours: 0, nightHours: 0 }
 
+  if (emp.payType === 'daily') {
+    const totalHours = calculateWeekHours(employeeId, weekStart)
+    const dailyRate = Number(emp.dailyRate || 0)
+    let workedDays = 0
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(weekStart)
+      dayDate.setDate(dayDate.getDate() + i)
+      const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
+      if (isWorkingType(shift)) workedDays++
+    }
+    const totalCost = Math.round(dailyRate * workedDays * 100) / 100
+    return { totalHours, effectiveHours: totalHours, totalCost, sundayHolidayHours: 0, nightHours: 0, hourlyRate: workedDays > 0 ? Math.round((totalCost / totalHours) * 100) / 100 : 0 }
+  }
+
   if (emp.payType === 'monthly') {
     const totalHours = calculateWeekHours(employeeId, weekStart)
     const monthlySalary = Number(emp.monthlySalary || 0)

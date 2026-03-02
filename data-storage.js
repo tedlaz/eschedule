@@ -295,13 +295,14 @@ function normalizeLoadedState(loaded) {
   if (loaded.employees) {
     loaded.employees = loaded.employees.map((emp) => ({
       ...emp,
-      payType: emp.payType || 'hourly',
+      payType: ['hourly', 'monthly', 'daily'].includes(emp.payType) ? emp.payType : 'hourly',
       vat: String(emp.vat || '').trim(),
       nickName: String(emp.nickName || '').trim(),
       hourlyRate: Number(emp.hourlyRate ?? 0),
       weekWorkingHours: Number(emp.weekWorkingHours ?? emp.workingHours ?? 40),
       weekWorkingDays: Number(emp.weekWorkingDays ?? 5),
       monthlySalary: Number(emp.monthlySalary ?? 0),
+      dailyRate: Number(emp.dailyRate ?? 0),
       defaultRestDays: emp.defaultRestDays || emp.restDays || [5, 6],
     }))
   }

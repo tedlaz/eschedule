@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eSchedule</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="xlsx.full.min.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <h1>📅 Εβδομαδιαίο Πρόγραμμα Εργασίας</h1>
+    <p id="companyName" class="company-name" onclick="editCompanyName()">Προσθέστε όνομα εταιρείας…</p>
+
+    <div class="summary-cards" id="summaryCards">
+      <!-- Populated by JavaScript -->
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" onclick="openEmployeeModal()" title="Νέος εργαζόμενος">+ Εργ</button>
+      <button class="btn-secondary" onclick="openSettingsModal('week')" title="Ρυθμίσεις">⚙️</button>
+      <button class="btn-secondary" onclick="openWorkRestModal()" title="Εργασία/Ανάπαυση">📊</button>
+      <button class="btn-secondary" onclick="openPayrollModal()" title="Μισθοδοσία">💶</button>
+      <button class="btn-secondary" onclick="printSchedule()" title="Εκτύπωση">🖨️</button>
+      <button class="btn-secondary" onclick="openCardDiffModal()" title="Κάρτα εργαζομένου vs πρόγραμμα">🪪Δ</button>
+      <button class="btn-secondary" onclick="openCardGridModal()" title="Πρόγραμμα από κάρτα">🪪Π</button>
+      <button class="btn-secondary" id="multiSelectBtn" onclick="toggleMultiSelectMode()"
+        title="Ενεργοποίηση πολλαπλής επιλογής">☐</button>
+      <button class="btn-secondary" onclick="importSchedule()" title="Εισαγωγή αρχείου">📥</button>
+      <button class="btn-secondary" onclick="exportSchedule()" title="Εξαγωγή αρχείου">🗃️</button>
+      <button class="btn-danger" onclick="resetAllData()" title="Καθαρισμός όλων των δεδομένων">✕</button>
+
+      <div class="selection-actions" id="selectionActions">
+        <!-- Populated by JavaScript when cells are selected -->
+      </div>
+
+      <div class="week-nav">
+        <button class="btn-secondary" onclick="changeWeek(-1)">◀</button>
+        <span id="weekDisplay"></span>
+        <button class="btn-secondary" onclick="changeWeek(1)">▶</button>
+        <button class="btn-secondary" onclick="copyPreviousWeekToCurrentWeek()"
+          title="Αντιγραφή προηγούμενης εβδομάδας">⎘ Προηγ.→Τρέχ.</button>
+      </div>
+    </div>
+
+    <div class="schedule-container">
+      <div class="print-header" id="printHeader"></div>
+      <table class="schedule-table" id="scheduleTable">
+        <!-- Populated by JavaScript -->
+      </table>
+
+
+    </div>
+  </div>
+
+  <!-- Add/Edit Employee Modal -->
+  <div class="modal" id="employeeModal">
+    <div class="modal-content">
+      <h2 id="employeeModalTitle">Προσθήκη εργαζομένου</h2>
+      <input type="hidden" id="editEmployeeId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>ΑΦΜ (9 ψηφία)</label>
+          <input type="text" id="employeeVat" placeholder="123456789" maxlength="9" pattern="\d{9}">
+        </div>
+        <div class="form-group">
+          <label>Nickname (για grid)</label>
+          <input type="text" id="employeeNick" placeholder="π.χ. Μάριος">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Τύπος αμοιβής</label>
+          <select id="employeePayType" onchange="togglePayTypeFields()">
+            <option value="hourly">Ωρομίσθιος</option>
+            <option value="monthly">Μηνιαίος</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Τριετίες</label>
+          <select id="employeeTriennia" onchange="updateEmployeeMinHints()">
+            <option value="0">Χωρίς τριετίες</option>
+            <option value="1">1η +10%</option>
+            <option value="2">2η +20%</option>
+            <option value="3">3η +30%</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" id="hourlyFields">
+        <div class="form-group">
+          <label>Εβδομαδιαίες ώρες εργασίας</label>
+          <input type="number" id="employeeHourlyWeekHours" value="40" min="1" max="80"
+            oninput="updateEmployeeMinHints()">
+        </div>
+        <div class="form-group">
+          <label>Εβδομαδιαίες εργ. ημέρ.</label>
+          <input type="number" id="employeeHourlyWeekDays" value="5" min="1" max="6">
+        </div>
+        <div class="form-group">
+          <label>€/Ώρα</label>
+          <input type="number" id="employeeHourlyRate" value="10" min="0" step="0.01"
+            oninput="updateEmployeeMinHints()">
+          <small id="hourlyRateMinHint" style="color:#888;"></small>
+        </div>
+      </div>
+
+      <div class="form-row" id="monthlyFields" style="display:none;">
+        <div class="form-group">
+          <label>Μηνιαίος μισθός (€)</label>
+          <input type="number" id="employeeMonthlySalary" value="1000" min="0" step="0.01"
+            oninput="updateEmployeeMinHints()">
+          <small id="monthlySalaryMinHint" style="color:#888;"></small>
+        </div>
+        <div class="form-group">
+          <label>Εβδομαδιαίες ώρες εργασίας</label>
+          <input type="number" id="employeeMonthlyWeekHours" value="40" min="1" max="80"
+            oninput="updateEmployeeMinHints()">
+        </div>
+        <div class="form-group">
+          <label>Εβδομαδιαίες εργάσιμες ημέρες</label>
+          <input type="number" id="employeeMonthlyWeekDays" value="5" min="1" max="6">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Ημέρες Ρεπό (μπορούν να αλλάζουν ανά εβδομάδα)</label>
+        <div class="checkbox-group" id="restDaysCheckboxes">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('employeeModal')">Cancel</button>
+        <button class="btn-primary" onclick="saveEmployee()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shift Editor Modal -->
+  <div class="modal" id="shiftModal">
+    <div class="modal-content">
+      <h2>Edit Shift</h2>
+      <input type="hidden" id="shiftEmployeeId">
+      <input type="hidden" id="shiftDate">
+      <div class="form-group">
+        <label>Shift Type</label>
+        <select id="shiftType" onchange="toggleShiftFields()">
+          <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
+          <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
+          <option value="AN">Ανάπαυση (AN)</option>
+        </select>
+      </div>
+      <div id="workingShiftFields">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Time</label>
+            <input type="text" id="shiftStart" value="09:00" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
+          </div>
+          <div class="form-group">
+            <label>End Time</label>
+            <input type="text" id="shiftEnd" value="17:00" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
+          </div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="hasSecondShift" onchange="toggleSecondShiftFields()"> Δεύτερη βάρδια ίδια
+            μέρα</label>
+        </div>
+        <div class="form-row" id="secondShiftFields" style="display:none;">
+          <div class="form-group">
+            <label>Τύπος 2ης βάρδιας</label>
+            <select id="shiftType2">
+              <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
+              <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Start Time 2</label>
+            <input type="text" id="shiftStart2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
+          </div>
+          <div class="form-group">
+            <label>End Time 2</label>
+            <input type="text" id="shiftEnd2" value="" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM"
+              class="time-input-24h">
+          </div>
+        </div>
+      </div>
+      <div class="form-group" id="absenceReasonGroup" style="display: none;">
+        <label>Reason (optional)</label>
+        <input type="text" id="absenceReason" placeholder="Enter reason">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-danger" onclick="clearShift()">Clear</button>
+        <button class="btn-secondary" onclick="closeModal('shiftModal')">Cancel</button>
+        <button class="btn-primary" onclick="saveShift()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- businessHoursModal merged into settingsModal -->
+
+  <!-- Rest Days Modal (per week per employee) -->
+  <div class="modal" id="restDaysModal">
+    <div class="modal-content wide">
+      <h2>Εβδομαδιαία Ρεπό</h2>
+      <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Select 2 rest days per employee for the current
+        week.</p>
+      <div id="restDaysForm">
+        <!-- Populated by JavaScript -->
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="resetRestDaysToDefault()">Reset to Defaults</button>
+        <button class="btn-secondary" onclick="closeModal('restDaysModal')">Cancel</button>
+        <button class="btn-primary" onclick="saveWeekRestDays()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee Week Settings Modal -->
+  <div class="modal" id="employeeWeekModal">
+    <div class="modal-content">
+      <h2 id="employeeWeekModalTitle">Ρυθμίσεις Εβδομάδας</h2>
+      <input type="hidden" id="employeeWeekId">
+      <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;" id="employeeWeekSubtitle">Configure settings for
+        this employee for the current week.</p>
+
+      <div class="form-group">
+        <label>Ώρες εργασίας Βδομάδας</label>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size: 0.9em; font-weight: normal;">Working Hours/Week</label>
+            <input type="number" id="weekMinHours" value="20" min="0" max="60">
+          </div>
+          <div class="form-group" style="display:none;">
+            <label style="font-size: 0.9em; font-weight: normal;">Working Hours/Week (legacy hidden)</label>
+            <input type="number" id="weekMaxHours" value="40" min="0" max="80">
+          </div>
+          <div class="form-group">
+            <label style="font-size: 0.9em; font-weight: normal;">€/Ώρα</label>
+            <input type="number" id="weekHourlyRate" value="10" min="0" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Εβδομαδιαία Ρεπό</label>
+        <div class="checkbox-group" id="weekRestDaysCheckboxes">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="resetEmployeeWeekToDefault()">Reset to Defaults</button>
+        <button class="btn-secondary" onclick="closeModal('employeeWeekModal')">Cancel</button>
+        <button class="btn-primary" onclick="saveEmployeeWeekSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card vs Schedule Difference Modal -->
+  <div class="modal" id="cardDiffModal">
+    <div class="modal-content wide">
+      <h2>🪪 Διαφορές κάρτας vs προγράμματος</h2>
+      <p style="color:#666; margin-bottom:10px; font-size:0.9em;">Φόρτωσε CSV/TXT από σύστημα κάρτας με στήλες:
+        employee/date/in/out (ή αντίστοιχες ελληνικές).</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Αρχείο κάρτας</label>
+          <input type="file" id="cardFileInput" accept=".csv,.txt,.xlsx,.xls">
+        </div>
+        <div class="form-group">
+          <label>Όριο διαφοράς (λεπτά)</label>
+          <input type="number" id="cardDiffThreshold" value="15" min="0" max="240">
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('cardDiffModal')">Κλείσιμο</button>
+        <button class="btn-primary" onclick="runCardDiffReport()">Έλεγχος διαφορών</button>
+      </div>
+      <div id="cardDiffReport" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Card Grid Modal -->
+  <div class="modal" id="cardGridModal">
+    <div class="modal-content wide" style="max-width:95vw;">
+      <h2>🪪 Πρόγραμμα από Κάρτα</h2>
+      <p style="color:#666; margin-bottom:10px; font-size:0.9em;">Φόρτωσε CSV/TXT από σύστημα κάρτας.
+        Οι ώρες στρογγυλοποιούνται στο πλησιέστερο μισάωρο.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Αρχείο κάρτας</label>
+          <input type="file" id="cardGridFileInput" accept=".csv,.txt,.xlsx,.xls">
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('cardGridModal')">Κλείσιμο</button>
+        <button class="btn-primary" onclick="renderCardGrid()">Εμφάνιση</button>
+      </div>
+      <div id="cardGridContainer" style="margin-top:12px; overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Timeline Modal -->
+  <div class="modal" id="timelineModal">
+    <div class="modal-content timeline-modal">
+      <div class="timeline-header">
+        <h2 id="timelineModalTitle">📊 Daily Timeline</h2>
+        <div class="timeline-day-selector" id="timelineDaySelector">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+      <div class="timeline-grid" id="timelineGrid">
+        <!-- Populated by JavaScript -->
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('timelineModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal: Ωράριο Εβδομάδας + Προεπιλογές (tabbed) -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content wide" style="padding:16px 20px;">
+      <h2 style="margin:0 0 8px; font-size:1.1em;">⚙️ Ρυθμίσεις</h2>
+      <div style="display:flex; gap:0; border-bottom:2px solid #e2e8f0; margin-bottom:10px;">
+        <button id="settingsTabBtnWeek" onclick="switchSettingsTab('week')"
+          style="padding:5px 14px; border:none; border-bottom:2px solid #667eea; margin-bottom:-2px; background:none; font-weight:700; color:#667eea; cursor:pointer; font-size:0.88em;">
+          ⚙️ Ωράριο Εβδομάδας
+        </button>
+        <button id="settingsTabBtnDefaults" onclick="switchSettingsTab('defaults')"
+          style="padding:5px 14px; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; background:none; font-weight:400; color:#64748b; cursor:pointer; font-size:0.88em;">
+          🔧 Προεπιλογές
+        </button>
+      </div>
+
+      <div id="settingsTabWeek">
+        <p style="color:#666; margin:0 0 6px; font-size:0.82em;">Αλλαγές μόνο για αυτή την εβδομάδα. 🎉 = επίσημη αργία
+          (+75%).</p>
+        <div id="businessHoursForm"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" onclick="copyFromDefaultHours()">Reset to Default</button>
+          <button class="btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+          <button class="btn-primary" onclick="saveBusinessHours()">Save</button>
+        </div>
+      </div>
+
+      <div id="settingsTabDefaults" style="display:none;">
+        <h3 style="margin:0 0 3px; color:#667eea; font-size:0.88em;">Βασικές αποδοχές (ελάχιστα)</h3>
+        <p style="color:#666; font-size:0.8em; margin:0 0 6px;">Βάση πλήρους απασχόλησης (40ω/εβδ.). Τριετίες &amp;
+          μερική εργασία υπολογίζονται αυτόματα.</p>
+        <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-group">
+            <label>Ελάχιστος μηνιαίος μισθός (€)</label>
+            <input type="number" id="defBaseMinMonthlySalary" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Ελάχιστο ωρομίσθιο (€/ώρα)</label>
+            <input type="number" id="defBaseMinHourlyRate" min="0" step="0.01">
+          </div>
+        </div>
+        <h3 style="margin:8px 0 3px; color:#667eea; font-size:0.88em;">Προεπιλεγμένο Ωράριο</h3>
+        <div id="defaultBusinessHoursForm"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+          <button class="btn-primary" onclick="saveDefaults()">Save Defaults</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payroll Summary Modal -->
+  <div class="modal" id="payrollModal">
+    <div class="modal-content wide">
+      <h2>💶 Payroll Summary</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Employee</label>
+          <select id="payrollEmployeeFilter" onchange="renderPayrollSummary()"></select>
+        </div>
+        <div class="form-group">
+          <label>Month</label>
+          <input type="month" id="payrollMonthFilter" onchange="renderPayrollSummary()">
+        </div>
+      </div>
+      <div id="payrollSummaryContent"></div>
+      <div class="modal-buttons">
+        <button class="btn-primary" onclick="exportSelectedMonthData()">💾 Εξαγωγή μήνα JSON</button>
+        <button class="btn-secondary" onclick="closeModal('payrollModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Work/Rest Intervals Modal -->
+  <div class="modal" id="workRestModal">
+    <div class="modal-content timeline-modal">
+      <div class="timeline-header">
+        <h2 id="workRestTitle">📊 Διαστήματα Εργασίας/Ανάπαυσης</h2>
+      </div>
+      <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Εμφανίζει εναλλάξ διαστήματα εργασίας και ανάπαυσης
+        μέσα στην εβδομάδα για κάθε εργαζόμενο.</p>
+      <div id="workRestDiagram">
+        <!-- Populated by JavaScript -->
+      </div>
+      <div class="legend" style="margin-top: 15px;">
+        <div class="legend-item">
+          <div class="legend-color working"></div>
+          <span>Εργασία</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color rest"></div>
+          <span>Ανάπαυση</span>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('workRestModal')">Κλείσιμο</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="payroll.js"></script>
+  <script src="config.js"></script>
+  <script src="argies.js"></script>
+  <script src="adeies.js"></script>
+  <!-- app modules (split from script.js) -->
+  <script src="app-state.js"></script>
+  <script src="shift-helpers.js"></script>
+  <script src="date-utils.js"></script>
+  <script src="data-storage.js"></script>
+  <script src="schedule.js"></script>
+  <script src="hours-calc.js"></script>
+  <script src="timeline.js"></script>
+  <script src="employees.js"></script>
+  <script src="shifts.js"></script>
+  <script src="business-hours.js"></script>
+  <script src="payroll-engine.js"></script>
+  <script src="export-data.js"></script>
+  <script src="work-rest.js"></script>
+  <script src="print-schedule.js"></script>
+  <script src="import-data.js"></script>
+  <script src="selection.js"></script>
+  <script src="card-diff.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

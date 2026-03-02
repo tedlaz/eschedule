@@ -2,9 +2,11 @@ function togglePayTypeFields() {
   const payType = document.getElementById('employeePayType')?.value || 'hourly'
   const hourly = document.getElementById('hourlyFields')
   const monthly = document.getElementById('monthlyFields')
+  const daily = document.getElementById('dailyFields')
   if (!hourly || !monthly) return
-  hourly.style.display = payType === 'hourly' ? 'flex' : 'none'
+  hourly.style.display  = payType === 'hourly'  ? 'flex' : 'none'
   monthly.style.display = payType === 'monthly' ? 'flex' : 'none'
+  if (daily) daily.style.display = payType === 'daily' ? 'flex' : 'none'
   updateEmployeeMinHints()
 }
 
@@ -36,6 +38,17 @@ function updateEmployeeMinHints() {
     monthlyHint.textContent = `Ελάχιστο: €${minMonthly.toFixed(2)}/μήνα`
     monthlyHint.style.color = below ? '#c0392b' : '#888'
     monthlyHint.style.fontWeight = below ? 'bold' : 'normal'
+  }
+
+  // Daily hint (minimum daily wage = min hourly × 8)
+  const minDaily = Math.round(baseMinHourly * bonus * 8 * 100) / 100
+  const dailyVal = parseFloat(document.getElementById('employeeDailyRate')?.value) || 0
+  const dailyHint = document.getElementById('dailyRateMinHint')
+  if (dailyHint) {
+    const below = dailyVal > 0 && dailyVal < minDaily
+    dailyHint.textContent = `Ελάχιστο: €${minDaily.toFixed(2)}/ημέρα`
+    dailyHint.style.color = below ? '#c0392b' : '#888'
+    dailyHint.style.fontWeight = below ? 'bold' : 'normal'
   }
 }
 
@@ -71,6 +84,10 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('employeeMonthlySalary').value = emp.monthlySalary || 0
     document.getElementById('employeeMonthlyWeekHours').value = emp.weekWorkingHours || 40
     document.getElementById('employeeMonthlyWeekDays').value = emp.weekWorkingDays || 5
+    if (document.getElementById('employeeDailyRate')) {
+      document.getElementById('employeeDailyRate').value = emp.dailyRate || 0
+      document.getElementById('employeeDailyWeekDays').value = emp.weekWorkingDays || 5
+    }
     emp.defaultRestDays.forEach((d) => {
       document.getElementById(`restDay${d}`).checked = true
     })
@@ -92,6 +109,10 @@ function openEmployeeModal(employeeId = null) {
     document.getElementById('employeeMonthlySalary').value = 0
     document.getElementById('employeeMonthlyWeekHours').value = 40
     document.getElementById('employeeMonthlyWeekDays').value = 5
+    if (document.getElementById('employeeDailyRate')) {
+      document.getElementById('employeeDailyRate').value = empDefaults.dailyRate || 0
+      document.getElementById('employeeDailyWeekDays').value = 5
+    }
     empDefaults.restDays.forEach((d) => {
       document.getElementById(`restDay${d}`).checked = true
     })
@@ -115,6 +136,8 @@ function saveEmployee() {
   const monthlySalary = parseFloat(document.getElementById('employeeMonthlySalary').value) || 0
   const monthlyWeekHours = parseFloat(document.getElementById('employeeMonthlyWeekHours').value) || 40
   const monthlyWeekDays = parseInt(document.getElementById('employeeMonthlyWeekDays').value) || 5
+  const dailyRate = parseFloat(document.getElementById('employeeDailyRate')?.value) || 0
+  const dailyWeekDays = parseInt(document.getElementById('employeeDailyWeekDays')?.value) || 5
   const editId = document.getElementById('editEmployeeId').value
 
   const restDays = []
@@ -157,6 +180,12 @@ function saveEmployee() {
     return
   }
 
+  // Validation for daily employees
+  if (payType === 'daily' && dailyRate <= 0) {
+    alert('Το ημερομίσθιο πρέπει να είναι μεγαλύτερο από 0')
+    return
+  }
+
   // Minimum salary / rate enforcement (prorated for partial-time)
   const _PR = window.PAYROLL_RULES || {}
   const _baseMinMonthly = Number(_PR.baseMinMonthlySalary ?? 880)
@@ -176,6 +205,14 @@ function saveEmployee() {
     if (monthlySalary < _minMonthly) {
       alert(
         `Ο μηνιαίος μισθός €${monthlySalary.toFixed(2)} είναι κάτω από το ελάχιστο επιτρεπτό €${_minMonthly.toFixed(2)}/μήνα (βάση €${_baseMinMonthly.toFixed(2)} + ${triennia} τριετίες, αναλογικά ${_weekHrsM}h/εβδ.).`,
+      )
+      return
+    }
+  } else if (payType === 'daily') {
+    const _minDaily = Math.round(_baseMinHourly * _triBonus * 8 * 100) / 100
+    if (dailyRate < _minDaily) {
+      alert(
+        `Το ημερομίσθιο €${dailyRate.toFixed(2)} είναι κάτω από το ελάχιστο επιτρεπτό €${_minDaily.toFixed(2)}/ημέρα.`,
       )
       return
     }
@@ -214,9 +251,10 @@ function saveEmployee() {
     emp.payType = payType
     emp.triennia = triennia
     emp.hourlyRate = hourlyRate
-    emp.weekWorkingHours = payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours
-    emp.weekWorkingDays = payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays
+    emp.weekWorkingHours = payType === 'monthly' ? monthlyWeekHours : payType === 'daily' ? dailyWeekDays * 8 : hourlyWeekHours
+    emp.weekWorkingDays = payType === 'monthly' ? monthlyWeekDays : payType === 'daily' ? dailyWeekDays : hourlyWeekDays
     emp.monthlySalary = monthlySalary
+    emp.dailyRate = dailyRate
     emp.defaultRestDays = restDays
   } else {
     data.employees.push({
@@ -225,9 +263,10 @@ function saveEmployee() {
       payType,
       triennia,
       hourlyRate,
-      weekWorkingHours: payType === 'monthly' ? monthlyWeekHours : hourlyWeekHours,
-      weekWorkingDays: payType === 'monthly' ? monthlyWeekDays : hourlyWeekDays,
+      weekWorkingHours: payType === 'monthly' ? monthlyWeekHours : payType === 'daily' ? dailyWeekDays * 8 : hourlyWeekHours,
+      weekWorkingDays: payType === 'monthly' ? monthlyWeekDays : payType === 'daily' ? dailyWeekDays : hourlyWeekDays,
       monthlySalary,
+      dailyRate,
       defaultRestDays: restDays,
     })
   }

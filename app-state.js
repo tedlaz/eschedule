@@ -20,7 +20,7 @@ let data = {
   employees: [],
   companyName: '',
   defaultBusinessHours: JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
-  defaultEmployeeSettings: { workingHours: 40, restDays: [5, 6], hourlyRate: 10 },
+  defaultEmployeeSettings: { workingHours: 40, restDays: [5, 6], hourlyRate: 10, dailyRate: 0 },
   payrollRules: {
     absencePolicies: {
       holiday: { paid: true, multiplier: 1.0 },
