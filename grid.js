@@ -30,17 +30,7 @@ function _ensureRestForView() {
   }
 }
 
-// ─── Per-day business hours / holiday helpers ─────────────────────────────
-function getBizHoursForDay(date) {
-  const monday = getMonday(new Date(date))
-  const weekKey = formatDate(monday)
-  if (!data.weekBusinessHours[weekKey]) {
-    data.weekBusinessHours[weekKey] = JSON.parse(JSON.stringify(data.defaultBusinessHours))
-  }
-  const dow = (date.getDay() + 6) % 7 // 0=Mon … 6=Sun
-  return data.weekBusinessHours[weekKey][dow] || { open: '09:00', close: '17:00', closed: false }
-}
-
+// ─── Per-day holiday helpers ──────────────────────────────────────────────
 function getHolidaysForDay(date) {
   const monday = getMonday(new Date(date))
   const weekKey = formatDate(monday)
@@ -69,6 +59,9 @@ function renderGrid() {
   const table = document.getElementById('scheduleTable')
   if (!table || !viewStart) return
 
+  // Update company name in header
+  if (typeof renderCompanyName === 'function') renderCompanyName()
+
   // Update date range display
   const viewEnd = new Date(viewStart)
   viewEnd.setDate(viewEnd.getDate() + 6)
@@ -90,21 +83,17 @@ function renderGrid() {
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(viewStart)
     dayDate.setDate(dayDate.getDate() + i)
-    const biz = getBizHoursForDay(dayDate)
     const isHoliday = isDateHoliday(dayDate)
     const isSunday = dayDate.getDay() === 0
     const dow = (dayDate.getDay() + 6) % 7
     let thCls = isSunday ? 'sunday-header' : ''
     if (isHoliday) thCls = 'holiday-header'
-    const overnight = isOvernightRange(biz.open, biz.close)
-    const bizStr = `${biz.open}–${biz.close}${overnight ? '+1' : ''}`
     const holidayName = isHoliday ? getHolidayNameForDate(dayDate) : ''
     html += `<th class="${thCls}" title="${holidayName || (isHoliday ? '' : 'Κάντε κλικ για timeline')}"
                onclick="openGridDayTimeline('${formatDate(dayDate)}')" style="cursor:pointer">
       <div class="day-abbrev">${DAY_ABBREV[dow]}</div>
       <div class="day-date">${dayDate.getDate()}/${dayDate.getMonth() + 1}</div>
       ${holidayName ? `<div class="holiday-name-hdr">${holidayName}</div>` : ''}
-      <div class="biz-hours-hdr">${bizStr}</div>
       ${isHoliday || isSunday ? '<div class="premium-badge">+75%</div>' : ''}
     </th>`
   }
@@ -411,12 +400,13 @@ function renderCardBar(entry, illegal = false, missingCount = 0, prevGapH = null
 // ─── Cell click → shift modal ─────────────────────────────────────────────
 function handleDayCellClick(event, vat, dateStr) {
   if (!data.employees.some((e) => String(e.vat) === String(vat))) return // virtual employee
-  handleCellClick(event, String(vat), dateStr, false)
+  handleCellClick(event, String(vat), dateStr)
 }
 
 // ─── renderAll shim (called by existing modules after save/change) ─────────
 function renderAll() {
   renderGrid()
+  renderCompanyName()
 }
 
 // ─── Card import ─────────────────────────────────────────────────────────
@@ -598,43 +588,6 @@ async function importCardFile(file) {
   }
 }
 
-// ─── Company modal ────────────────────────────────────────────────────────
-function openCompanyModal() {
-  const modal = document.getElementById('companyModal')
-  if (!modal) return
-  document.getElementById('cmpName').value = data.companyName || ''
-  // Populate business hours rows
-  const tbody = document.getElementById('bizHoursBody')
-  let rows = ''
-  for (let d = 0; d < 7; d++) {
-    const bh = data.defaultBusinessHours[d] || { open: '09:00', close: '17:00', closed: false }
-    rows += `<tr>
-      <td>${DAYS[d]}</td>
-      <td><input type="text" id="bhOpen${d}" value="${bh.open}" maxlength="5" placeholder="ΩΩ:ΛΛ" class="bh-time-input"></td>
-      <td><input type="text" id="bhClose${d}" value="${bh.close}" maxlength="5" placeholder="ΩΩ:ΛΛ" class="bh-time-input"></td>
-      <td><input type="checkbox" id="bhClosed${d}" ${bh.closed ? 'checked' : ''}></td>
-    </tr>`
-  }
-  tbody.innerHTML = rows
-  modal.classList.add('active')
-}
-
-function saveCompany() {
-  data.companyName = document.getElementById('cmpName').value.trim()
-  for (let d = 0; d < 7; d++) {
-    data.defaultBusinessHours[d] = {
-      open: document.getElementById(`bhOpen${d}`)?.value || '09:00',
-      close: document.getElementById(`bhClose${d}`)?.value || '17:00',
-      closed: document.getElementById(`bhClosed${d}`)?.checked || false,
-    }
-  }
-  // Reset cached weekBusinessHours so they pick up new defaults
-  data.weekBusinessHours = {}
-  saveData()
-  closeModal('companyModal')
-  renderGrid()
-}
-
 // ─── Employee list modal ──────────────────────────────────────────────────
 function openEmployeeListModal() {
   renderEmployeeList()
@@ -688,6 +641,17 @@ async function handleCardFileSelect(input) {
 function closeModal(id) {
   const el = document.getElementById(id)
   if (el) el.classList.remove('active')
+
+  // Reset shift modal title when closing
+  if (id === 'shiftModal') {
+    const title = el?.querySelector('h2')
+    if (title) title.textContent = 'Edit Shift'
+  }
+
+  // Restore card grid injected shifts when timeline closes
+  if (id === 'timelineModal' && typeof cardGridRestoreShifts === 'function') {
+    cardGridRestoreShifts()
+  }
 }
 
 // ─── Card time correction ─────────────────────────────────────────────────

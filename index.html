@@ -62,7 +62,6 @@
 
     .day-abbrev  { font-weight: 700; font-size: 13px; }
     .day-date    { font-size: 11px; opacity: .85; }
-    .biz-hours-hdr { font-size: 10px; opacity: .8; margin-top: 1px; }
     .holiday-name-hdr { font-size: 9px; opacity: .9; }
     .premium-badge {
       display: inline-block; margin-top: 2px;
@@ -241,12 +240,6 @@
     }
     .emp-list-item:last-child { border-bottom: none; }
 
-    /* ─── Business hours table (inside companyModal) ───────────────── */
-    #bizHoursTable { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-    #bizHoursTable th { text-align: left; padding: 4px 6px; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
-    #bizHoursTable td { padding: 4px 6px; }
-    #bizHoursTable .bh-time-input { width: 68px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace; text-align: center; }
-
     /* ─── Card modal tabs ──────────────────────────────────────────── */
     .card-tabs, .sched-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
     .card-tab-btn, .sched-tab-btn {
@@ -263,12 +256,14 @@
 </head>
 <body>
 <div class="container">
-  <h1>eSchedule</h1>
+  <div class="page-header">
+    <h1>eSchedule</h1>
+    <span id="companyName" class="company-name company-name-placeholder" onclick="editCompanyName()">Όνομα εταιρείας…</span>
+  </div>
 
   <!-- ─── Toolbar ─────────────────────────────────────────────── -->
   <div class="toolbar">
     <!-- Left actions -->
-    <button class="btn-secondary" onclick="openCompanyModal()">🏢 Εταιρεία</button>
     <button class="btn-secondary" onclick="openEmployeeListModal()">👥 Εργαζόμενοι</button>
     <button class="btn-secondary" onclick="openScheduleModal()">📅 Πρόγραμμα</button>
     <button class="btn-secondary" onclick="openCardImportModal()">📁 Κάρτα</button>
@@ -301,30 +296,6 @@
 <!-- ════════════════════════════════════════════════════════════════
      MODALS
      ════════════════════════════════════════════════════════════════ -->
-
-<!-- 1. Company Modal -->
-<div class="modal" id="companyModal">
-  <div class="modal-content">
-    <h2>🏢 Στοιχεία Εταιρείας</h2>
-    <div class="form-group">
-      <label>Όνομα Εταιρείας</label>
-      <input type="text" id="cmpName" placeholder="π.χ. ACME Α.Ε." maxlength="100">
-    </div>
-    <div class="form-group">
-      <label>Ώρες Λειτουργίας (προεπιλογή)</label>
-      <table id="bizHoursTable">
-        <thead>
-          <tr><th>Ημέρα</th><th>Άνοιγμα</th><th>Κλείσιμο</th><th>Κλειστά</th></tr>
-        </thead>
-        <tbody id="bizHoursBody"></tbody>
-      </table>
-    </div>
-    <div class="modal-buttons">
-      <button class="btn-secondary" onclick="closeModal('companyModal')">Ακύρωση</button>
-      <button class="btn-primary" onclick="saveCompany()">💾 Αποθήκευση</button>
-    </div>
-  </div>
-</div>
 
 <!-- 2a. Employee List Modal -->
 <div class="modal" id="employeeListModal">
@@ -681,7 +652,6 @@
 <script src="employees.js"></script>
 <script src="shifts.js"></script>
 <script src="card-diff.js"></script>
-<script src="business-hours.js"></script>
 <script src="payroll-engine.js"></script>
 <script src="schedule.js"></script>  <!-- provides ensureRestShiftsForWeek, copyPreviousWeekToCurrentWeek -->
 <script src="timeline.js"></script>  <!-- day-level timeline modal + drag handlers -->

@@ -1,9 +1,4 @@
-function openShiftModal(employeeId, dateStr, isClosed) {
-  if (isClosed) {
-    alert('Business is closed on this day')
-    return
-  }
-
+function openShiftModal(employeeId, dateStr) {
   const modal = document.getElementById('shiftModal')
   document.getElementById('shiftEmployeeId').value = employeeId
   document.getElementById('shiftDate').value = dateStr
@@ -37,10 +32,8 @@ function openShiftModal(employeeId, dateStr, isClosed) {
       document.getElementById('shiftType').value = 'rest'
     } else {
       document.getElementById('shiftType').value = 'working'
-      const businessHours = getBusinessHoursForWeek()
-      const businessDay = businessHours[dayIndex]
-      document.getElementById('shiftStart').value = businessDay.open
-      document.getElementById('shiftEnd').value = businessDay.close
+      document.getElementById('shiftStart').value = '09:00'
+      document.getElementById('shiftEnd').value = '17:00'
       document.getElementById('hasSecondShift').checked = false
       document.getElementById('shiftStart2').value = ''
       document.getElementById('shiftEnd2').value = ''
@@ -275,18 +268,6 @@ function saveShift() {
       return
     }
 
-    const date = new Date(dateStr)
-    const dayOfWeek = date.getDay()
-    const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    const businessHours = getBusinessHoursForWeek()
-    const businessDay = businessHours[dayIndex]
-
-    if (!isWithinBusinessHours(start, end, businessDay.open, businessDay.close)) {
-      if (!confirm('Shift hours are outside business hours. Continue anyway?')) {
-        return
-      }
-    }
-
     const rec = { type: shiftType, start, end }
     if (has2) {
       rec.start2 = start2
@@ -366,26 +347,8 @@ function saveMultipleShifts(shiftType) {
       return
     }
 
-    const businessHours = getBusinessHoursForWeek()
-    let outsideHoursWarningShown = false
-
     // Apply to all selected cells
     for (const cell of selectedCells) {
-      const date = new Date(cell.dateStr)
-      const dayOfWeek = date.getDay()
-      const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-      const businessDay = businessHours[dayIndex]
-
-      if (
-        !outsideHoursWarningShown &&
-        !isWithinBusinessHours(start, end, businessDay.open, businessDay.close)
-      ) {
-        if (!confirm('Some shifts are outside business hours. Continue anyway?')) {
-          return
-        }
-        outsideHoursWarningShown = true
-      }
-
       const key = `${cell.employeeId}_${cell.dateStr}`
       const rec = { type: shiftType, start, end }
       if (has2) {

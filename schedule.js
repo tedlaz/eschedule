@@ -27,11 +27,11 @@ function editCompanyName() {
   const commit = () => {
     data.companyName = input.value.trim()
     saveData()
-    const p = document.createElement('p')
-    p.id = 'companyName'
-    p.className = 'company-name'
-    p.onclick = editCompanyName
-    input.replaceWith(p)
+    const span = document.createElement('span')
+    span.id = 'companyName'
+    span.className = 'company-name'
+    span.onclick = editCompanyName
+    input.replaceWith(span)
     renderCompanyName()
   }
   input.addEventListener('blur', commit)
@@ -89,10 +89,6 @@ function copyPreviousWeekToCurrentWeek() {
   prevWeekStart.setDate(prevWeekStart.getDate() - 7)
   const prevWeekKey = formatDate(prevWeekStart)
 
-  // copy only business hours — holidays belong to the target week, never the source
-  if (data.weekBusinessHours?.[prevWeekKey]) {
-    data.weekBusinessHours[currentWeekKey] = JSON.parse(JSON.stringify(data.weekBusinessHours[prevWeekKey]))
-  }
   // weekHolidays for the current week are intentionally NOT copied: they are
   // auto-detected per week (Greek national holidays differ week to week).
 
@@ -131,7 +127,6 @@ function renderSchedule() {
     printHeader.textContent = `Πρόγραμμα Εργασίας: ${weekRange}`
   }
 
-  const businessHours = getBusinessHoursForWeek()
   const holidays = getHolidaysForWeek()
   let html = '<thead><tr><th>Εργαζόμενος</th>'
 
@@ -139,26 +134,18 @@ function renderSchedule() {
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(currentWeekStart)
     dayDate.setDate(dayDate.getDate() + i)
-    const businessDay = businessHours[i]
-    const isClosed = false
     const isHoliday = holidays.includes(i)
     const isSunday = i === 6
-    const overnight = !isClosed && isOvernightRange(businessDay.open, businessDay.close)
 
-    let thClass = isClosed ? 'closed' : ''
+    let thClass = ''
     if (isHoliday) thClass += ' holiday-header'
     else if (isSunday) thClass += ' sunday-header'
-
-    const hoursDisplay = !isClosed
-      ? `<div class="business-hours">${businessDay.open} - ${businessDay.close}${overnight ? ' +1' : ''}</div>`
-      : '<div class="business-hours">Closed</div>'
 
     html += `<th class="${thClass} clickable" onclick="openTimelineModal(${i})">
                 ${DAY_ABBREV[i]}<br>
                 <small>${dayDate.getDate()}</small>
                 ${isHoliday ? `<div class="holiday-name">${getHolidayName(formatDate(dayDate))}</div>` : ''}
-                ${hoursDisplay}
-                ${(isHoliday || isSunday) && !isClosed ? '<div class="premium-badge">+75%</div>' : ''}
+                ${isHoliday || isSunday ? '<div class="premium-badge">+75%</div>' : ''}
             </th>`
   }
   html += '</tr></thead><tbody>'
@@ -196,23 +183,20 @@ function renderSchedule() {
       const dayDate = new Date(currentWeekStart)
       dayDate.setDate(dayDate.getDate() + i)
       const dateStr = formatDate(dayDate)
-      const businessDay = businessHours[i]
-      const isClosed = false
       const isRestDay = restDays.includes(i)
       const shift = data.shifts[`${emp.vat}_${dateStr}`]
       const isHolidayOrSun = isDayHolidayOrSunday(i)
 
       let cellClass = 'shift-cell'
-      if (isClosed) cellClass += ' closed-day'
-      else if (isRestDay && !shift) cellClass += ' rest-day'
-      if (isHolidayOrSun && !isClosed) cellClass += ' holiday-day'
+      if (isRestDay && !shift) cellClass += ' rest-day'
+      if (isHolidayOrSun) cellClass += ' holiday-day'
 
       const isSelected = selectedCells.some(
         (c) => String(c.employeeId) === String(emp.vat) && c.dateStr === dateStr,
       )
       if (isSelected) cellClass += ' selected-cell'
 
-      html += `<td class="${cellClass}" data-employee-id="${emp.vat}" data-date="${dateStr}" data-closed="${isClosed}" onclick="handleCellClick(event, '${String(emp.vat)}', '${dateStr}', ${isClosed})">`
+      html += `<td class="${cellClass}" data-employee-id="${emp.vat}" data-date="${dateStr}" onclick="handleCellClick(event, '${String(emp.vat)}', '${dateStr}')">`
 
       if (shift) {
         if (isWorkingType(shift)) {

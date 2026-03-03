@@ -4,22 +4,9 @@ const DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 
 // const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_ABBREV = ['Δε', 'Τρ', 'Τε', 'Πε', 'Πα', 'Σα', 'Κυ']
 
-// Default business hours — loaded from config.js (window.DEFAULT_BUSINESS_HOURS)
-// Falls back to the values below when config.js is absent.
-const DEFAULT_BUSINESS_HOURS = window.DEFAULT_BUSINESS_HOURS || {
-  0: { open: '09:00', close: '17:00', closed: false }, // Monday
-  1: { open: '09:00', close: '17:00', closed: false },
-  2: { open: '09:00', close: '17:00', closed: false },
-  3: { open: '09:00', close: '17:00', closed: false },
-  4: { open: '09:00', close: '17:00', closed: false },
-  5: { open: '00:00', close: '00:00', closed: false }, // Saturday
-  6: { open: '00:00', close: '00:00', closed: false }, // Sunday
-}
-
 let data = {
   employees: [],
   companyName: '',
-  defaultBusinessHours: JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
   defaultEmployeeSettings: { workingHours: 40, restDays: [5, 6], hourlyRate: 10, dailyRate: 0 },
   payrollRules: {
     absencePolicies: {
@@ -30,7 +17,6 @@ let data = {
     officialHolidayPaidIfAbsent: true,
     officialHolidayPayMultiplier: 1.0,
   },
-  weekBusinessHours: {}, // key: "YYYY-MM-DD" (Monday of week), value: business hours for week
   weekRestDays: {}, // key: "YYYY-MM-DD_employeeId", value: array of rest day indices
   weekEmployeeSettings: {}, // key: "YYYY-MM-DD_employeeVat", value: {workingHours}
   weekHolidays: {}, // key: "YYYY-MM-DD" (Monday of week), value: array of day indices (0-6) that are holidays

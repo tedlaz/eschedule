@@ -838,35 +838,6 @@ function aggregatePayrollClient(state, employeeId = null) {
     })
   })
 
-  // Ensure payroll considers non-Sunday closed days even when there is no shift record
-  Object.entries(state.weekBusinessHours || {}).forEach(([wk, bh]) => {
-    const wkDate = parseISODateLocal(wk)
-    if (isNaN(wkDate.getTime())) return
-    for (let idx = 0; idx < 7; idx++) {
-      if (idx === 6) continue // Sunday excluded by rule
-      if (!bh?.[idx]?.closed) continue
-      const d = new Date(wkDate)
-      d.setDate(d.getDate() + idx)
-      const day = formatISODateLocal(d)
-      selectedIds.forEach((eid) => datesByEmp.get(eid)?.add(day))
-    }
-  })
-
-  // Monthly-paid employees: include all days of configured weeks so planned-day rule is evaluated
-  Object.keys(state.weekBusinessHours || {}).forEach((wk) => {
-    const wkDate = parseISODateLocal(wk)
-    if (isNaN(wkDate.getTime())) return
-    selectedIds.forEach((eid) => {
-      const emp = empMap.get(eid)
-      if (!emp || emp.payType !== 'monthly') return
-      for (let idx = 0; idx < 7; idx++) {
-        const d = new Date(wkDate)
-        d.setDate(d.getDate() + idx)
-        datesByEmp.get(eid)?.add(formatISODateLocal(d))
-      }
-    })
-  })
-
   selectedIds.forEach((eid) => {
     const emp = empMap.get(eid)
     if (!emp) return
@@ -881,8 +852,6 @@ function aggregatePayrollClient(state, employeeId = null) {
       const isOfficialHoliday = holidayIdxs.has(dayIdx)
       const isSunday = dayIdx === 6
       const isHolidayOrSunday = isOfficialHoliday || isSunday
-      const weekBusiness = (state.weekBusinessHours || {})[weekKey] || state.defaultBusinessHours || {}
-      const isClosedNonSunday = false
 
       const ws = weekSettings[`${weekKey}_${eid}`] || {}
       const workingHours = getWorkingHours(ws, getWorkingHours(emp, 40))
@@ -926,9 +895,6 @@ function aggregatePayrollClient(state, employeeId = null) {
           if (isPaidAbsenceType(shift.type) && !isSunday) {
             payable = Math.max(payable, Math.round(standardDaily * 100) / 100)
           }
-        }
-        if (isClosedNonSunday) {
-          payable = Math.max(payable, Math.round(standardDaily * 100) / 100)
         }
         if (!isSunday && isOfficialHoliday && officialPaidIfAbsent) {
           payable = Math.max(payable, Math.round(standardDaily * officialMultiplier * 100) / 100)

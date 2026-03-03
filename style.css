@@ -16,44 +16,50 @@ body {
   margin: 0 auto;
 }
 
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
 h1 {
   color: white;
-  text-align: center;
-  margin-bottom: 6px;
+  margin: 0;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .company-name {
-  color: rgba(255,255,255,0.88);
-  text-align: center;
-  font-size: 1.05em;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  margin: 0 0 16px;
+  color: white;
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0;
   cursor: pointer;
+  white-space: nowrap;
+  padding: 2px 8px 2px 14px;
+  border-left: 2px solid rgba(255,255,255,0.35);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
 }
 .company-name:hover {
   color: #fff;
-  text-decoration: underline dotted rgba(255,255,255,0.5);
+  text-decoration: underline;
 }
 .company-name-placeholder {
-  opacity: 0.45;
+  color: rgba(255,255,255,0.5);
   font-weight: 400;
   font-style: italic;
 }
 .company-name-input {
-  display: block;
-  margin: 0 auto 16px;
-  text-align: center;
-  font-size: 1.05em;
-  font-weight: 600;
+  font-size: 2em;
+  font-weight: bold;
   background: rgba(255,255,255,0.15);
   border: 1px solid rgba(255,255,255,0.5);
   border-radius: 6px;
   color: #fff;
   padding: 4px 12px;
-  width: 280px;
-  max-width: 90%;
+  width: 260px;
+  max-width: 50vw;
   outline: none;
 }
 .company-name-input::placeholder {

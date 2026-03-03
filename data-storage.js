@@ -196,7 +196,6 @@ function sanitizeStateForPersist(state) {
   }
 
   out.shifts = cleanShifts
-  out.weekBusinessHours = filterWeekMapToActive(state.weekBusinessHours || {})
   // Keep weekHolidays for active weeks AND for any week that has at least one holiday
   // (manual or auto-detected), so holidays are not wiped on weeks without working shifts.
   const rawHolidays = state.weekHolidays || {}
@@ -309,14 +308,6 @@ function normalizeLoadedState(loaded) {
   const payrollRules = loaded.payrollRules || {}
   return {
     employees: loaded.employees || [],
-    defaultBusinessHours: loaded.defaultBusinessHours
-      ? Object.fromEntries(
-          Object.entries(loaded.defaultBusinessHours).map(([k, d]) => [
-            k,
-            { open: String(d?.open || '09:00'), close: String(d?.close || '17:00'), closed: false },
-          ]),
-        )
-      : JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
     defaultEmployeeSettings: loaded.defaultEmployeeSettings
       ? {
           ...loaded.defaultEmployeeSettings,
@@ -349,17 +340,6 @@ function normalizeLoadedState(loaded) {
       baseMinHourlyRate:
         payrollRules.baseMinHourlyRate != null ? Number(payrollRules.baseMinHourlyRate) : undefined,
     },
-    weekBusinessHours: Object.fromEntries(
-      Object.entries(loaded.weekBusinessHours || {}).map(([wk, v]) => [
-        wk,
-        Object.fromEntries(
-          Object.entries(v || {}).map(([k, d]) => [
-            k,
-            { open: String(d?.open || '09:00'), close: String(d?.close || '17:00'), closed: false },
-          ]),
-        ),
-      ]),
-    ),
     weekRestDays: loaded.weekRestDays || {},
     weekEmployeeSettings: loaded.weekEmployeeSettings || {},
     weekHolidays: loaded.weekHolidays || {},

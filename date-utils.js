@@ -22,15 +22,6 @@ function getWeekKey() {
   return formatDate(currentWeekStart)
 }
 
-function getBusinessHoursForWeek() {
-  const weekKey = getWeekKey()
-  if (!data.weekBusinessHours[weekKey]) {
-    // Copy default hours for this week
-    data.weekBusinessHours[weekKey] = JSON.parse(JSON.stringify(data.defaultBusinessHours))
-  }
-  return data.weekBusinessHours[weekKey]
-}
-
 function autoDetectGreekHolidaysForWeek(weekStart) {
   if (typeof greekAllHolidaysForYear !== 'function') return []
   const years = new Set()
@@ -49,6 +40,13 @@ function autoDetectGreekHolidaysForWeek(weekStart) {
     if (allHolidays.some((h) => formatDate(h) === dStr)) indices.push(i)
   }
   return indices
+}
+
+function getHolidayName(dateStr) {
+  const custom = data.customHolidayNames?.[dateStr]
+  if (custom) return custom
+  if (typeof greekHolidayNameForDate === 'function') return greekHolidayNameForDate(dateStr) || ''
+  return ''
 }
 
 function getHolidaysForWeek() {
@@ -100,26 +98,6 @@ function getEffectiveEndHour(startTime, endTime) {
   if (endDecimal <= startDecimal) endDecimal += 24
   return endDecimal
 }
-
-// Helper: check if a shift is within business hours (handles overnight for both)
-function isWithinBusinessHours(shiftStart, shiftEnd, bhOpen, bhClose) {
-  const [ss, ssm] = shiftStart.split(':').map(Number)
-  const [se, sem] = shiftEnd.split(':').map(Number)
-  const [bo, bom] = bhOpen.split(':').map(Number)
-  const [bc, bcm] = bhClose.split(':').map(Number)
-
-  let shiftStartMin = ss * 60 + ssm
-  let shiftEndMin = se * 60 + sem
-  let bhOpenMin = bo * 60 + bom
-  let bhCloseMin = bc * 60 + bcm
-
-  // Normalize overnight ranges to continuous timeline
-  if (shiftEndMin <= shiftStartMin) shiftEndMin += 24 * 60
-  if (bhCloseMin <= bhOpenMin) bhCloseMin += 24 * 60
-
-  return shiftStartMin >= bhOpenMin && shiftEndMin <= bhCloseMin
-}
-
 
 function parseISODateLocal(dateStr) {
   const [y, m, d] = String(dateStr).split('-').map(Number)

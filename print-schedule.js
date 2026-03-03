@@ -4,7 +4,6 @@ function printSchedule() {
   const weekRange = `${formatDisplayDate(currentWeekStart)} – ${formatDisplayDate(weekEnd)}`
   const company = String(data.companyName || '').trim()
 
-  const businessHours = getBusinessHoursForWeek()
   const holidays = getHolidaysForWeek()
 
   // ── Build header row ──────────────────────────────────────────────────────
@@ -13,15 +12,12 @@ function printSchedule() {
     d.setDate(d.getDate() + i)
     const isHol = holidays.includes(i)
     const isSun = i === 6
-    const bh = businessHours[i]
-    const hoursLine = bh ? `${bh.open}–${bh.close}` : ''
     const holName = isHol ? getHolidayName(formatDate(d)) : ''
     const tag = isHol ? ' holiday' : isSun ? ' sunday' : ''
     return `<th class="day-header${tag}">
       <div class="day-name">${DAY_ABBREV[i]}</div>
       <div class="day-date">${d.getDate()}/${d.getMonth() + 1}</div>
       ${holName ? `<div class="hol-name">${holName}</div>` : ''}
-      <div class="biz-hours">${hoursLine}</div>
     </th>`
   }).join('')
 
@@ -134,7 +130,6 @@ function printSchedule() {
   .day-header .day-name  { font-size: 10pt; font-weight: bold; }
   .day-header .day-date  { font-size: 8pt; color: #333; }
   .day-header .hol-name  { font-size: 7.5pt; color: #000; font-style: italic; margin-top: 1pt; }
-  .day-header .biz-hours { font-size: 7.5pt; color: #555; margin-top: 2pt; }
 
   .day-header.holiday { background: #ede9fe; border-top: 2pt solid #7c3aed; }
   .day-header.sunday  { background: #fff3e0; border-top: 1.5pt solid #f57c00; }

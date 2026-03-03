@@ -86,7 +86,6 @@ function calculateMonthlyOverworkExtra(employeeId, monthKey, monthlySalary, week
 function calculateWeekHours(employeeId, weekStart) {
   let total = 0
   const weekKey = formatDate(weekStart)
-  const businessHours = data.weekBusinessHours[weekKey] || data.defaultBusinessHours || {}
   const holidays = data.weekHolidays[weekKey] || []
 
   const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
@@ -234,7 +233,6 @@ function calculateWeekCost(employeeId, weekStart) {
   currentWeekStart = new Date(weekStart)
   const settings = getEmployeeWeekSettings(employeeId)
   const holidays = getHolidaysForWeek()
-  const businessHours = getBusinessHoursForWeek()
   currentWeekStart = previousWeek
 
   const hourlyRate = settings.hourlyRate || emp.hourlyRate || 10
@@ -270,12 +268,6 @@ function calculateWeekCost(employeeId, weekStart) {
       if (isPaidAbsenceType(shift.type)) {
         nonWorkingPaidHours = Math.max(nonWorkingPaidHours, standardDailyHours)
       }
-    }
-
-    const isClosedNonSunday = i !== 6 && !!businessHours[i]?.closed
-    if (isClosedNonSunday) {
-      // User rule: closed day (except Sunday) counts as working day
-      nonWorkingPaidHours = Math.max(nonWorkingPaidHours, standardDailyHours)
     }
 
     if (officialHolidayPaidIfAbsent && holidays.includes(i)) {

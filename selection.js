@@ -1,4 +1,4 @@
-function handleCellClick(event, employeeId, dateStr, isClosed) {
+function handleCellClick(event, employeeId, dateStr) {
   // Check if Ctrl/Cmd is held or multi-select mode is on
   if (event.ctrlKey || event.metaKey || isMultiSelectMode) {
     toggleCellSelection(employeeId, dateStr)
@@ -12,11 +12,11 @@ function handleCellClick(event, employeeId, dateStr, isClosed) {
       } else {
         // Clear selection and select just this cell, then open modal
         clearSelection()
-        openShiftModal(employeeId, dateStr, isClosed)
+        openShiftModal(employeeId, dateStr)
       }
     } else {
       // No selection - standard behavior
-      openShiftModal(employeeId, dateStr, isClosed)
+      openShiftModal(employeeId, dateStr)
     }
   }
 }
@@ -88,13 +88,8 @@ function openShiftModalForSelection() {
 
   // Set default values
   document.getElementById('shiftType').value = 'ΕΡΓ'
-  const businessHours = getBusinessHoursForWeek()
-  const firstDate = new Date(firstCell.dateStr)
-  const dayOfWeek = firstDate.getDay()
-  const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-  const businessDay = businessHours[dayIndex]
-  document.getElementById('shiftStart').value = businessDay.open
-  document.getElementById('shiftEnd').value = businessDay.close
+  document.getElementById('shiftStart').value = '09:00'
+  document.getElementById('shiftEnd').value = '17:00'
   document.getElementById('hasSecondShift').checked = false
   const t2 = document.getElementById('shiftType2')
   if (t2) t2.value = 'ΕΡΓ'

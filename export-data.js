@@ -40,18 +40,13 @@ function exportSelectedMonthData() {
   })
 
   const weeksFromShifts = new Set(monthShiftsEntries.map((e) => e.week).filter(Boolean))
-  Object.keys(snapshot.weekBusinessHours || {}).forEach((wk) => {
-    if (weekIntersectsMonth(String(wk))) weeksFromShifts.add(String(wk))
-  })
   Object.keys(snapshot.weekHolidays || {}).forEach((wk) => {
     if (weekIntersectsMonth(String(wk))) weeksFromShifts.add(String(wk))
   })
 
   const sortedWeeks = [...weeksFromShifts].sort((a, b) => String(a).localeCompare(String(b)))
-  const monthWeekBusinessHours = {}
   const monthWeekHolidays = {}
   sortedWeeks.forEach((wk) => {
-    if (snapshot.weekBusinessHours?.[wk]) monthWeekBusinessHours[wk] = snapshot.weekBusinessHours[wk]
     if (snapshot.weekHolidays?.[wk]) monthWeekHolidays[wk] = snapshot.weekHolidays[wk]
   })
 
@@ -59,14 +54,12 @@ function exportSelectedMonthData() {
     __meta: { exportedAt: Date.now(), month: monthFilter, mode: 'month-compact' },
     companyName: snapshot.companyName || '',
     employees: snapshot.employees || [],
-    defaultBusinessHours: snapshot.defaultBusinessHours || JSON.parse(JSON.stringify(DEFAULT_BUSINESS_HOURS)),
     defaultEmployeeSettings: snapshot.defaultEmployeeSettings || {
       workingHours: 40,
       restDays: [5, 6],
       hourlyRate: 10,
     },
     payrollRules: snapshot.payrollRules || {},
-    weekBusinessHours: monthWeekBusinessHours,
     weekHolidays: monthWeekHolidays,
     weekRestDays: {},
     weekEmployeeSettings: {},

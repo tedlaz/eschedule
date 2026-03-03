@@ -1,5 +1,4 @@
 function openTimelineModal(dayIndex) {
-  const businessHours = getBusinessHoursForWeek()
   selectedTimelineDay = dayIndex
   renderTimeline()
   document.getElementById('timelineModal').classList.add('active')
@@ -67,11 +66,9 @@ function renderTimeline() {
     return blocks.join('')
   }
 
-  const businessHours = getBusinessHoursForWeek()
   const dayDate = new Date(currentWeekStart)
   dayDate.setDate(dayDate.getDate() + selectedTimelineDay)
   const dateStr = formatDate(dayDate)
-  const businessDay = businessHours[selectedTimelineDay]
 
   // Update modal title
   document.getElementById('timelineModalTitle').textContent =
@@ -82,36 +79,18 @@ function renderTimeline() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(currentWeekStart)
     d.setDate(d.getDate() + i)
-    const bh = businessHours[i]
     const isActive = i === selectedTimelineDay
-    const isClosed = bh.closed
-    selectorHtml += `<button class="timeline-day-btn ${isActive ? 'active' : ''} ${isClosed ? 'closed' : ''}"
-                      onclick="selectTimelineDay(${i})" ${isClosed ? 'disabled' : ''}>
+    selectorHtml += `<button class="timeline-day-btn ${isActive ? 'active' : ''}"
+                      onclick="selectTimelineDay(${i})">
                       ${DAY_ABBREV[i]} ${d.getDate()}
                     </button>`
   }
   document.getElementById('timelineDaySelector').innerHTML = selectorHtml
 
-  if (businessDay.closed) {
-    document.getElementById('timelineGrid').innerHTML = `
-      <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: #999;">
-        Business is closed on ${DAYS[selectedTimelineDay]}
-      </div>`
-    return
-  }
+  // Calculate hour range from actual shifts (default 06:00–22:00)
+  let minHour = 6
+  let maxHour = 22
 
-  // Calculate hour range - start with business hours, then expand to include all shifts
-  const openHour = parseInt(businessDay.open.split(':')[0])
-  let closeHourRaw =
-    parseInt(businessDay.close.split(':')[0]) + (parseInt(businessDay.close.split(':')[1]) > 0 ? 1 : 0)
-  const bhOvernight = isOvernightRange(businessDay.open, businessDay.close)
-  // For overnight business hours, effective close is next day (e.g., 01:00 -> 25)
-  let effectiveCloseHour = bhOvernight ? closeHourRaw + 24 : closeHourRaw
-
-  let minHour = openHour
-  let maxHour = effectiveCloseHour
-
-  // Check all shifts to find the actual min/max hours needed
   data.employees.forEach((emp) => {
     const shift = data.shifts[`${emp.vat}_${dateStr}`]
     if (isWorkingType(shift)) {
@@ -168,12 +147,8 @@ function renderTimeline() {
     // Hour cells background
     hours.forEach((h) => {
       const hMod = h % 24
-      const isBusinessHour = bhOvernight
-        ? (h >= openHour || h < closeHourRaw) && h < effectiveCloseHour
-        : hMod >= openHour && hMod < closeHourRaw
       const isNightHour = hMod >= 22 || hMod < 6
-      let cellClass = isBusinessHour ? 'business-open' : 'business-closed'
-      if (isNightHour) cellClass += ' night-hour'
+      let cellClass = isNightHour ? 'night-hour' : 'business-open'
       html += `<div class="timeline-hour-cell ${cellClass}"></div>`
     })
 
@@ -234,12 +209,7 @@ function renderTimeline() {
     <div class="staff-count-cells">
       ${hours
         .map((h) => {
-          const hMod = h % 24
-          const isBusinessHour = bhOvernight
-            ? (h >= openHour || h < closeHourRaw) && h < effectiveCloseHour
-            : hMod >= openHour && hMod < closeHourRaw
           let countClass = staffCounts[h] === 0 ? 'low' : staffCounts[h] <= 2 ? 'medium' : 'good'
-          if (!isBusinessHour) countClass += ' outside-hours'
           return `<div class="staff-count-cell ${countClass}">${staffCounts[h]}</div>`
         })
         .join('')}

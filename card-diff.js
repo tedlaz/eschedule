@@ -375,8 +375,6 @@ function cardGridOpenTimeline(weekStartStr, dayIndex) {
 
   // Inject card data as shifts for ALL 7 days of the week
   const saved = {}
-  const dayMinStart = {} // per day index: earliest shift start hour
-  const dayMaxEnd = {} // per day index: latest shift end hour
   for (let d = 0; d < 7; d++) {
     const dayDate = new Date(currentWeekStart)
     dayDate.setDate(dayDate.getDate() + d)
@@ -394,54 +392,22 @@ function cardGridOpenTimeline(weekStartStr, dayIndex) {
         shift.end2 = cardEntries[1].out || cardEntries[1].in
       }
       data.shifts[k] = shift
-
-      // Track min/max hours for business hours override
-      cardEntries.forEach((ce) => {
-        if (ce.in) {
-          const h = parseInt(ce.in.split(':')[0])
-          dayMinStart[d] = Math.min(dayMinStart[d] ?? 24, h)
-        }
-        if (ce.out) {
-          const h = parseInt(ce.out.split(':')[0]) + (parseInt(ce.out.split(':')[1]) > 0 ? 1 : 0)
-          dayMaxEnd[d] = Math.max(dayMaxEnd[d] ?? 0, h)
-        }
-      })
     })
   }
 
-  // Override business hours for this week to match actual card shift range
-  const weekKey = getWeekKey()
-  const bh = getBusinessHoursForWeek()
-  const savedBH = JSON.parse(JSON.stringify(bh))
-  for (let d = 0; d < 7; d++) {
-    if (dayMinStart[d] != null && dayMaxEnd[d] != null) {
-      const openH = Math.max(0, dayMinStart[d] - 1)
-      const closeH = Math.min(23, dayMaxEnd[d])
-      bh[d] = {
-        open: String(openH).padStart(2, '0') + ':00',
-        close: String(closeH).padStart(2, '0') + ':00',
-        closed: false,
-      }
-    }
-  }
-
-  _cardGridInjected = { saved, prevWeekStart, addedEmployees, savedBH, weekKey }
+  _cardGridInjected = { saved, prevWeekStart, addedEmployees }
   renderAll()
   openTimelineModal(dayIndex)
 }
 
 function cardGridRestoreShifts() {
   if (!_cardGridInjected) return
-  const { saved, prevWeekStart, addedEmployees, savedBH, weekKey } = _cardGridInjected
+  const { saved, prevWeekStart, addedEmployees } = _cardGridInjected
   // Restore shifts
   Object.keys(saved).forEach((k) => {
     if (saved[k] === undefined) delete data.shifts[k]
     else data.shifts[k] = saved[k]
   })
-  // Restore business hours
-  if (savedBH && weekKey && data.weekBusinessHours[weekKey]) {
-    data.weekBusinessHours[weekKey] = savedBH
-  }
   // Remove virtual employees that were temporarily added
   if (addedEmployees && addedEmployees.length) {
     const removeVats = new Set(addedEmployees.map((e) => e.vat))
