@@ -184,6 +184,16 @@
     }
     .card-missing-badge.exceeded { background: #ef4444; }
 
+    /* ─── Overnight seamless bar across cells ────────────────────────── */
+    .seg-spillover { cursor: pointer; }
+    /* Remove padding + border on connecting edges so bars touch */
+    td.overnight-out { padding-right: 0; border-right-color: transparent; }
+    td.overnight-in  { padding-left: 0;  border-left-color: transparent; }
+    /* Flat edges on connecting sides */
+    .bar-extends-right > .bar { border-radius: 3px 0 0 3px; }
+    .bar-extends-left  > .bar { border-radius: 0 3px 3px 0; }
+    .bar-extends-left.bar-extends-right > .bar { border-radius: 0; }
+
     /* ─── Modals ────────────────────────────────────────────────────── */
     .modal {
       display: none;

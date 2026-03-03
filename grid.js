@@ -190,11 +190,19 @@ function renderGrid() {
       const cardGapRaw = cardEntry ? getGapToPrevCardEntry(emp.vat, dateStr) : null
       const cardGapH = cardGapRaw !== null && cardGapRaw < 11 ? cardGapRaw : null
 
-      html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}${isSelected ? ' cell-selected' : ''}"
+      const spilloverSegs = isVirtual ? [] : getOvernightSpillover(emp.vat, dateStr)
+      // Detect if this cell's shift crosses midnight (for seamless bar styling)
+      const isOvernightOut = !isVirtual && shift && isWorkingType(shift) && (() => {
+        const sm = toMinutes(shift.start), em = toMinutes(shift.end)
+        return sm !== null && em !== null && em <= sm && em > 0
+      })()
+      const overnightCls = (isOvernightOut ? ' overnight-out' : '') + (spilloverSegs.length ? ' overnight-in' : '')
+
+      html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}${isSelected ? ' cell-selected' : ''}${overnightCls}"
                    data-vat="${emp.vat}"
                    data-date="${dateStr}"
                    onclick="handleDayCellClick(event,'${String(emp.vat)}','${dateStr}')">
-        ${renderShiftBar(shift, isHolSun, gapHours, prevGapH)}
+        ${renderShiftBar(shift, isHolSun, gapHours, prevGapH, spilloverSegs, String(emp.vat))}
         ${cardEntry ? renderCardBar(cardEntry, isIllegalCard, monthMissing, cardGapH) : ''}
       </td>`
     }
@@ -283,6 +291,37 @@ function getInterShiftGapHours(vat, dateStr) {
   return Math.round(gapH * 10) / 10
 }
 
+// ─── Overnight spillover ──────────────────────────────────────────────────
+// Returns array of spillover segments from the previous day's shift that
+// extend past midnight into dateStr.  Each: { endMinutes, cls, title, originDateStr }
+function getOvernightSpillover(vat, dateStr) {
+  const date = parseISODateLocal(dateStr)
+  const prevDate = new Date(date)
+  prevDate.setDate(prevDate.getDate() - 1)
+  const prevDateStr = formatDate(prevDate)
+  const prevShift = data.shifts[`${vat}_${prevDateStr}`]
+
+  if (!prevShift || !isWorkingType(prevShift)) return []
+
+  const prevIsHolSun = isDateSundayOrHoliday(prevDate)
+  const result = []
+
+  const checkSeg = (start, end, type) => {
+    const sm = toMinutes(start)
+    const em = toMinutes(end)
+    if (sm === null || em === null) return
+    if (em > sm || em === 0) return // not overnight or ends exactly at midnight
+    const cls = prevIsHolSun ? 'seg-holiday' : type === 'ΤΗΛ' ? 'seg-tel' : 'seg-work'
+    result.push({ endMinutes: em, cls, title: `${start}–${end} (${prevDateStr})`, originDateStr: prevDateStr })
+  }
+
+  checkSeg(prevShift.start, prevShift.end, prevShift.type)
+  if (prevShift.start2 && prevShift.end2) {
+    checkSeg(prevShift.start2, prevShift.end2, prevShift.type2 || prevShift.type)
+  }
+  return result
+}
+
 // ─── Bar helpers ─────────────────────────────────────────────────────────
 function pct(minutes) {
   return ((minutes / 1440) * 100).toFixed(3) + '%'
@@ -294,29 +333,46 @@ function minToStr(minutes) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+// ─── Spillover segment helper ─────────────────────────────────────────────
+// Renders faded segments from a previous day's overnight shift inside the
+// current bar.  Segments are absolutely positioned (don't affect flex layout)
+// and each one captures clicks to route to the origin date.
+function _renderSpilloverSegs(spilloverSegs, vat) {
+  if (!spilloverSegs || !spilloverSegs.length) return ''
+  const originDate = spilloverSegs[0].originDateStr
+  let html = ''
+  spilloverSegs.forEach((seg) => {
+    html += `<div class="seg ${seg.cls} seg-spillover" style="left:0;width:${pct(seg.endMinutes)}" title="${seg.title}" onclick="event.stopPropagation();handleDayCellClick(event,'${vat}','${originDate}')"></div>`
+  })
+  return html
+}
+
 // ─── Schedule bar ─────────────────────────────────────────────────────────
-function renderShiftBar(shift, isHolSun, gapHours, prevGapH) {
+function renderShiftBar(shift, isHolSun, gapHours, prevGapH, spilloverSegs, vat) {
   const gapLbl = gapHours != null ? `<span class="bar-gap-lbl">${gapHours}</span>` : ''
+  const spillHtml = _renderSpilloverSegs(spilloverSegs, vat)
+  const hasSpill = !!spillHtml
+  const extL = hasSpill ? ' bar-extends-left' : ''
 
   if (!shift) {
-    return `<div class="bar-wrap"><div class="bar bar-empty">${gapLbl}</div></div>`
+    return `<div class="bar-wrap${extL}"><div class="bar bar-empty">${spillHtml}${gapLbl}</div></div>`
   }
   if (isWorkingType(shift)) {
-    return _buildWorkBar(shift, isHolSun, prevGapH)
+    return _buildWorkBar(shift, isHolSun, prevGapH, spillHtml)
   }
   if (shift.type === 'AN') {
-    return `<div class="bar-wrap"><div class="bar bar-rest">${gapLbl || '<span class="bar-lbl">ΡΕΠΟ</span>'}</div></div>`
+    return `<div class="bar-wrap${extL}"><div class="bar bar-rest">${spillHtml}${gapLbl || '<span class="bar-lbl">ΡΕΠΟ</span>'}</div></div>`
   }
   if (isNonWorkingType(shift)) {
-    return '<div class="bar-wrap"><div class="bar bar-me"><span class="bar-lbl">ΜΕ</span></div></div>'
+    return `<div class="bar-wrap${extL}"><div class="bar bar-me">${spillHtml}<span class="bar-lbl">ΜΕ</span></div></div>`
   }
   // Absence
   const paid = isPaidAbsenceType(shift.type)
   const cls = paid ? 'bar-paid' : 'bar-unpaid'
-  return `<div class="bar-wrap"><div class="bar ${cls}"><span class="bar-lbl">${shift.type}</span></div></div>`
+  return `<div class="bar-wrap${extL}"><div class="bar ${cls}">${spillHtml}<span class="bar-lbl">${shift.type}</span></div></div>`
 }
 
-function _buildWorkBar(shift, isHolSun, prevGapH) {
+function _buildWorkBar(shift, isHolSun, prevGapH, spillHtml) {
   const segs = []
   const addSeg = (start, end, type) => {
     const sm = toMinutes(start)
@@ -328,11 +384,14 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
   }
   addSeg(shift.start, shift.end, shift.type)
   if (shift.start2 && shift.end2) addSeg(shift.start2, shift.end2, shift.type2 || shift.type)
-  if (!segs.length) return '<div class="bar-wrap"><div class="bar bar-empty"></div></div>'
+  if (!segs.length) return `<div class="bar-wrap"><div class="bar bar-empty">${spillHtml || ''}</div></div>`
 
   segs.sort((a, b) => a.sm - b.sm)
+  const hasOvernight = segs.some((s) => s.em > 1440)
+  const hasSpill = !!spillHtml
+  const extCls = (hasSpill ? ' bar-extends-left' : '') + (hasOvernight ? ' bar-extends-right' : '')
 
-  let segHtml = ''
+  let segHtml = spillHtml || ''
 
   // Show gap from previous shift end to start of today's first segment
   const firstSm = segs[0].sm
@@ -351,11 +410,14 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
       }
     }
     const segH = (s.em - s.sm) / 60
+    const isOvernight = s.em > 1440
+    // Cap at midnight for rendering — the spillover handles the next-day portion
+    const renderEm = isOvernight ? 1440 : s.em
     const lbl = segH >= 1 ? `<span class="seg-lbl">${Math.round(segH * 10) / 10}</span>` : ''
-    segHtml += `<div class="seg ${s.cls}" style="left:${pct(s.sm)};width:${pct(s.em - s.sm)}" title="${s.title}">${lbl}</div>`
+    segHtml += `<div class="seg ${s.cls}" style="left:${pct(s.sm)};width:${pct(renderEm - s.sm)}" title="${s.title}">${lbl}</div>`
   })
 
-  return `<div class="bar-wrap"><div class="bar bar-work">${segHtml}</div></div>`
+  return `<div class="bar-wrap${extCls}"><div class="bar bar-work">${segHtml}</div></div>`
 }
 
 // ─── Card bar ─────────────────────────────────────────────────────────────
