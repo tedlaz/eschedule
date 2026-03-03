@@ -1,5 +1,4 @@
 function roundToQuarter(hours) {
-  // Round to nearest 15 minutes (0.25 hours)
   return Math.round(hours * 4) / 4
 }
 
@@ -14,113 +13,13 @@ function selectTimelineDay(dayIndex) {
   renderTimeline()
 }
 
-function getMonthlyPlannedDayIndexes(weekDays) {
-  const d = Math.max(1, Math.min(6, Number(weekDays || 5)))
-  return [0, 1, 2, 3, 4, 5].slice(0, d) // Monday..Saturday
-}
-
-function countMonthlyAbsenceDaysInWeek(employeeId, weekStart, weekDays = 5) {
-  const plannedDays = getMonthlyPlannedDayIndexes(weekDays)
-  const weekKey = formatDate(weekStart)
-  const holidays = data.weekHolidays[weekKey] || []
-  let abs = 0
-  for (const i of plannedDays) {
-    if (holidays.includes(i)) continue // official holiday excluded
-    const dayDate = new Date(weekStart)
-    dayDate.setDate(dayDate.getDate() + i)
-    const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-    if (shift && (isAbsenceType(shift.type) || isNonWorkingType(shift)) && !isPaidAbsenceType(shift.type))
-      abs++
-  }
-  return abs
-}
-
-function countMonthlyAbsenceDaysInMonth(employeeId, monthKey, weekDays = 5) {
-  let abs = 0
-  Object.keys(data.shifts || {}).forEach((k) => {
-    const [empStr, dayStr] = k.split('_')
-    if (String(empStr) !== String(employeeId)) return
-    if (!String(dayStr || '').startsWith(monthKey)) return
-    const d = parseISODateLocal(dayStr)
-    const dayIdx = (d.getDay() + 6) % 7
-    const planned = getMonthlyPlannedDayIndexes(weekDays)
-    if (!planned.includes(dayIdx)) return
-    const wk = getWeekKeyFromDateStr(dayStr)
-    const holidays = data.weekHolidays[wk] || []
-    if (holidays.includes(dayIdx)) return
-    const shift = data.shifts[k]
-    if (shift && (isAbsenceType(shift.type) || isNonWorkingType(shift)) && !isPaidAbsenceType(shift.type))
-      abs++
-  })
-  return abs
-}
-
-function calculateMonthlyOverworkExtra(employeeId, monthKey, monthlySalary, weekWorkingHours = 40) {
-  if (Number(weekWorkingHours || 40) < 40) return { extraHours: 0, extraPay: 0, hourlyBase: 0 }
-
-  const weekHoursMap = {}
-  Object.entries(data.shifts || {}).forEach(([k, shift]) => {
-    const [empStr, dayStr] = String(k).split('_')
-    if (String(empStr) !== String(employeeId)) return
-    if (!String(dayStr || '').startsWith(monthKey)) return
-    if (!isWorkingType(shift)) return
-    const wk = getWeekKeyFromDateStr(dayStr)
-    weekHoursMap[wk] = (weekHoursMap[wk] || 0) + shiftTotalHours(shift)
-  })
-
-  const _weekNorm = getRule('weeklyNormalMax')
-  const _mwd = getRule('monthlyWorkingDays')
-  const extraHours = Object.values(weekHoursMap).reduce(
-    (acc, h) => acc + Math.max(0, Number(h || 0) - _weekNorm),
-    0,
-  )
-  const hourlyBase = (Number(monthlySalary || 0) * 6) / (_mwd * _weekNorm)
-  const extraPay = extraHours * hourlyBase * getRule('multipliers').ye // +20% υπερεργασία
-  return {
-    extraHours: Math.round(extraHours * 100) / 100,
-    extraPay: Math.round(extraPay * 100) / 100,
-    hourlyBase: Math.round(hourlyBase * 10000) / 10000,
-  }
-}
-
 function calculateWeekHours(employeeId, weekStart) {
   let total = 0
-  const weekKey = formatDate(weekStart)
-  const holidays = data.weekHolidays[weekKey] || []
-
-  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  if (emp?.payType === 'monthly') {
-    const weekDays = Number(emp.weekWorkingDays || 5)
-    const weekHours = Number(emp.weekWorkingHours || 40)
-    const planned = new Set(getMonthlyPlannedDayIndexes(weekDays))
-    const perDay = weekDays > 0 ? weekHours / weekDays : 0
-
-    for (let i = 0; i < 7; i++) {
-      const dayDate = new Date(weekStart)
-      dayDate.setDate(dayDate.getDate() + i)
-      const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-
-      if (isWorkingType(shift)) {
-        total += shiftTotalHours(shift)
-        continue
-      }
-
-      if (shift && isAbsenceType(shift.type) && isPaidAbsenceType(shift.type)) {
-        total += perDay
-      }
-    }
-    return Math.round(total * 100) / 100
-  }
-
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart)
     dayDate.setDate(dayDate.getDate() + i)
     const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-
-    // Main grid KPI should reflect actual worked hours only
-    if (isWorkingType(shift)) {
-      total += shiftTotalHours(shift)
-    }
+    if (isWorkingType(shift)) total += shiftTotalHours(shift)
   }
   return Math.round(total * 100) / 100
 }
@@ -135,13 +34,12 @@ function calculateShiftHours(start, end) {
   return Math.round(hours * 100) / 100
 }
 
-// Calculate night hours (22:00-06:00) within a shift
 function calculateNightHours(start, end) {
   const [sh, sm] = start.split(':').map(Number)
   const [eh, em] = end.split(':').map(Number)
   const startMin = sh * 60 + sm
   let endMin = eh * 60 + em
-  if (endMin <= startMin) endMin += 24 * 60 // overnight shift
+  if (endMin <= startMin) endMin += 24 * 60
 
   const _nightStartMin1 = getRule('nightStartMinutes')
   const _nightEndMin1 = getRule('nightEndMinutes')
@@ -154,7 +52,6 @@ function calculateNightHours(start, end) {
   return Math.round((nightMinutes / 60) * 10) / 10
 }
 
-// Calculate premium cost breakdown for a single shift
 function calculateShiftPremiums(shift, dayIndex) {
   if (!isWorkingType(shift)) return null
 
@@ -163,165 +60,140 @@ function calculateShiftPremiums(shift, dayIndex) {
   const regularTimeHours = totalHours - nightHours
   const isSundayOrHoliday = isDayHolidayOrSunday(dayIndex)
 
-  // Premiums:
-  // Sunday/Holiday: +75% on all hours
-  // Night (22:00-06:00): +25% on night hours
-  // Both stack additively
-
-  let premiumMultiplier = 1.0
-  let sundayHolidayExtra = 0
-  let nightExtra = 0
-
-  if (isSundayOrHoliday) {
-    sundayHolidayExtra = totalHours * getRule('withinHolidayAdd')
-  }
-  nightExtra = nightHours * getRule('withinNightAdd')
-
   return {
     totalHours,
     nightHours,
     regularTimeHours,
     isSundayOrHoliday,
-    sundayHolidayExtra, // extra hours equivalent from Sunday/holiday premium
-    nightExtra, // extra hours equivalent from night premium
-    effectiveHours: totalHours + sundayHolidayExtra + nightExtra,
   }
 }
 
-// Calculate week cost for an employee
-function calculateWeekCost(employeeId, weekStart) {
+// ─── Summary calculations ──────────────────────────────────────────────────
+
+function calculateWeekSummary(employeeId, weekStart) {
   const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  if (!emp) return { totalHours: 0, effectiveHours: 0, totalCost: 0, sundayHolidayHours: 0, nightHours: 0 }
+  const contractHours = Number(emp?.weekWorkingHours ?? 40)
 
-  if (emp.payType === 'daily') {
-    const totalHours = calculateWeekHours(employeeId, weekStart)
-    const dailyRate = Number(emp.dailyRate || 0)
-    let workedDays = 0
-    for (let i = 0; i < 7; i++) {
-      const dayDate = new Date(weekStart)
-      dayDate.setDate(dayDate.getDate() + i)
-      const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-      if (isWorkingType(shift)) workedDays++
-    }
-    const totalCost = Math.round(dailyRate * workedDays * 100) / 100
-    return { totalHours, effectiveHours: totalHours, totalCost, sundayHolidayHours: 0, nightHours: 0, hourlyRate: workedDays > 0 ? Math.round((totalCost / totalHours) * 100) / 100 : 0 }
-  }
-
-  if (emp.payType === 'monthly') {
-    const totalHours = calculateWeekHours(employeeId, weekStart)
-    const monthlySalary = Number(emp.monthlySalary || 0)
-    const weeklyBase = Math.round(((monthlySalary * 12) / 52) * 100) / 100
-    const _mwd = getRule('monthlyWorkingDays')
-    const _wh = Number(emp.weekWorkingHours || 40)
-    const _wd = Number(emp.weekWorkingDays || 5)
-    const _hourlyRate = _wh > 0 ? monthlySalary / ((_wh * _mwd) / 6) : 0
-    const _dailyHours = _wd > 0 ? _wh / _wd : 0
-    const absDays = countMonthlyAbsenceDaysInWeek(employeeId, weekStart, _wd)
-    const weeklyDeduction = Math.round(absDays * _dailyHours * _hourlyRate * 100) / 100
-    const weeklyCost = Math.max(0, Math.round((weeklyBase - weeklyDeduction) * 100) / 100)
-    return {
-      totalHours,
-      effectiveHours: totalHours,
-      totalCost: weeklyCost,
-      sundayHolidayHours: 0,
-      nightHours: 0,
-      hourlyRate: totalHours > 0 ? Math.round((weeklyCost / totalHours) * 100) / 100 : 0,
-    }
-  }
-
-  const previousWeek = currentWeekStart
-  currentWeekStart = new Date(weekStart)
-  const settings = getEmployeeWeekSettings(employeeId)
-  const holidays = getHolidaysForWeek()
-  currentWeekStart = previousWeek
-
-  const hourlyRate = settings.hourlyRate || emp.hourlyRate || 10
-  const standardDailyHours = Math.round((getWorkingHours(settings, getWorkingHours(emp, 40)) / 5) * 100) / 100
-
-  const rules = data.payrollRules || {}
-  const absencePolicies = rules.absencePolicies || {}
-  const officialHolidayPaidIfAbsent = rules.officialHolidayPaidIfAbsent !== false
-  const officialHolidayPayMultiplier = Number(rules.officialHolidayPayMultiplier ?? 1) || 1
-
-  let totalHours = 0
-  let effectiveHours = 0
-  let sundayHolidayHours = 0
+  let workedHours = 0
+  let dayHours = 0
   let nightHours = 0
+  let sundayHolidayHours = 0
+  let sundayHolidayDayHours = 0
+  let sundayHolidayNightHours = 0
 
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart)
     dayDate.setDate(dayDate.getDate() + i)
     const shift = data.shifts[`${employeeId}_${formatDate(dayDate)}`]
-    const premiums = calculateShiftPremiums(shift, i)
+    if (!shift || !isWorkingType(shift)) continue
 
-    if (premiums) {
-      totalHours += premiums.totalHours
-      effectiveHours += premiums.effectiveHours
-      if (premiums.isSundayOrHoliday) sundayHolidayHours += premiums.totalHours
-      nightHours += premiums.nightHours
-      continue
+    const total = shiftTotalHours(shift)
+    const night = shiftTotalNightHours(shift)
+    const day = total - night
+    const isHolSun = isDayHolidayOrSunday(i)
+
+    workedHours += total
+    dayHours += day
+    nightHours += night
+
+    if (isHolSun) {
+      sundayHolidayHours += total
+      sundayHolidayDayHours += day
+      sundayHolidayNightHours += night
     }
-
-    let nonWorkingPaidHours = 0
-
-    if (shift && isAbsenceType(shift.type)) {
-      if (isPaidAbsenceType(shift.type)) {
-        nonWorkingPaidHours = Math.max(nonWorkingPaidHours, standardDailyHours)
-      }
-    }
-
-    if (officialHolidayPaidIfAbsent && holidays.includes(i)) {
-      nonWorkingPaidHours = Math.max(nonWorkingPaidHours, standardDailyHours * officialHolidayPayMultiplier)
-    }
-
-    effectiveHours += nonWorkingPaidHours
   }
 
+  const r = (v) => Math.round(v * 100) / 100
   return {
-    totalHours: Math.round(totalHours * 10) / 10,
-    effectiveHours: Math.round(effectiveHours * 10) / 10,
-    totalCost: Math.round(effectiveHours * hourlyRate * 100) / 100,
-    sundayHolidayHours: Math.round(sundayHolidayHours * 10) / 10,
-    nightHours: Math.round(nightHours * 10) / 10,
-    hourlyRate,
+    contractHours,
+    workedHours: r(workedHours),
+    extraHours: r(Math.max(0, workedHours - contractHours)),
+    sundayHolidayHours: r(sundayHolidayHours),
+    sundayHolidayDayHours: r(sundayHolidayDayHours),
+    sundayHolidayNightHours: r(sundayHolidayNightHours),
+    regularDayHours: r(dayHours - sundayHolidayDayHours),
+    regularNightHours: r(nightHours - sundayHolidayNightHours),
+    dayHours: r(dayHours),
+    nightHours: r(nightHours),
   }
 }
 
-function updateSummary() {
-  let totalEmployees = data.employees.length
-  let totalHours = 0
-  let absences = 0
+function calculateMonthSummary(employeeId, monthKey) {
+  const totals = {
+    contractHours: 0,
+    workedHours: 0,
+    extraHours: 0,
+    sundayHolidayHours: 0,
+    sundayHolidayDayHours: 0,
+    sundayHolidayNightHours: 0,
+    regularDayHours: 0,
+    regularNightHours: 0,
+    dayHours: 0,
+    nightHours: 0,
+  }
 
-  data.employees.forEach((emp) => {
-    totalHours += calculateWeekHours(emp.vat, currentWeekStart)
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+  if (!emp) return totals
+
+  const contractHours = Number(emp.weekWorkingHours ?? 40)
+  const monthPrefix = `${monthKey}-`
+
+  // Find all weeks that intersect this month
+  const weekKeys = new Set()
+  Object.keys(data.shifts || {}).forEach((k) => {
+    const m = String(k).match(/^(.+?)_(\d{4}-\d{2}-\d{2})$/)
+    if (!m || String(m[1]) !== String(employeeId)) return
+    if (!String(m[2]).startsWith(monthPrefix)) return
+    weekKeys.add(getWeekKeyFromDateStr(m[2]))
   })
 
-  for (let i = 0; i < 7; i++) {
-    const dayDate = new Date(currentWeekStart)
-    dayDate.setDate(dayDate.getDate() + i)
-    const dateStr = formatDate(dayDate)
+  weekKeys.forEach((wk) => {
+    const weekStart = parseISODateLocal(wk)
+    // For each day in the week, only count if it's in the target month
+    let weekWorked = 0
+    let weekDay = 0
+    let weekNight = 0
+    let weekHolSun = 0
+    let weekHolSunDay = 0
+    let weekHolSunNight = 0
 
-    data.employees.forEach((emp) => {
-      const shift = data.shifts[`${emp.vat}_${dateStr}`]
-      if (shift && isAbsenceType(shift.type)) {
-        absences++
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(weekStart)
+      dayDate.setDate(dayDate.getDate() + i)
+      const dateStr = formatDate(dayDate)
+      if (!dateStr.startsWith(monthPrefix)) continue
+
+      const shift = data.shifts[`${employeeId}_${dateStr}`]
+      if (!shift || !isWorkingType(shift)) continue
+
+      const total = shiftTotalHours(shift)
+      const night = shiftTotalNightHours(shift)
+      const day = total - night
+      const isHolSun = isDateSundayOrHoliday(dayDate)
+
+      weekWorked += total
+      weekDay += day
+      weekNight += night
+      if (isHolSun) {
+        weekHolSun += total
+        weekHolSunDay += day
+        weekHolSunNight += night
       }
-    })
-  }
+    }
 
-  document.getElementById('summaryCards').innerHTML = `
-    <div class="summary-card">
-      <h3>${totalEmployees}</h3>
-      <p>Total Employees</p>
-    </div>
-    <div class="summary-card">
-      <h3>${totalHours}</h3>
-      <p>Scheduled Hours</p>
-    </div>
-    <div class="summary-card">
-      <h3>${absences}</h3>
-      <p>Absences This Week</p>
-    </div>`
+    totals.contractHours += contractHours
+    totals.workedHours += weekWorked
+    totals.extraHours += Math.max(0, weekWorked - contractHours)
+    totals.sundayHolidayHours += weekHolSun
+    totals.sundayHolidayDayHours += weekHolSunDay
+    totals.sundayHolidayNightHours += weekHolSunNight
+    totals.regularDayHours += weekDay - weekHolSunDay
+    totals.regularNightHours += weekNight - weekHolSunNight
+    totals.dayHours += weekDay
+    totals.nightHours += weekNight
+  })
+
+  const r = (v) => Math.round(v * 100) / 100
+  Object.keys(totals).forEach((k) => { totals[k] = r(totals[k]) })
+  return totals
 }
-
-// Employee Modal

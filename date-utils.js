@@ -63,9 +63,7 @@ function isDayHolidayOrSunday(dayIndex) {
 }
 
 function getRestDaysForEmployee(employeeId) {
-  // No per-week employee rest-day settings; use employee defaults only
-  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  return emp ? emp.defaultRestDays : [5, 6]
+  return [5, 6] // Global default: Saturday, Sunday
 }
 
 function getWorkingHours(source, fallback = 40) {
@@ -73,11 +71,8 @@ function getWorkingHours(source, fallback = 40) {
 }
 
 function getEmployeeWeekSettings(employeeId) {
-  // No per-week employee settings; use employee defaults only
   const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  return emp
-    ? { workingHours: getWorkingHours(emp, 40), hourlyRate: emp.hourlyRate || 10 }
-    : { workingHours: 40, hourlyRate: 10 }
+  return { workingHours: Number(emp?.weekWorkingHours ?? 40) }
 }
 
 // Helper: check if a time range spans overnight (end is next day)

@@ -11,11 +11,7 @@ function mergeImportedState(baseState, incomingState) {
     companyName: incoming.companyName || base.companyName || '',
     customHolidayNames: { ...(base.customHolidayNames || {}), ...(incoming.customHolidayNames || {}) },
     employees: [...byVat.values()].sort((a, b) => String(a.vat).localeCompare(String(b.vat))),
-    defaultEmployeeSettings: incoming.defaultEmployeeSettings || base.defaultEmployeeSettings,
-    payrollRules: incoming.payrollRules || base.payrollRules,
     weekHolidays: { ...(base.weekHolidays || {}), ...(incoming.weekHolidays || {}) },
-    weekRestDays: {},
-    weekEmployeeSettings: {},
     shifts: { ...(base.shifts || {}), ...(incoming.shifts || {}) },
   }
 }
@@ -154,13 +150,8 @@ async function importXlsxScheduleFile(file) {
   const incomingEmployees = [...employeeMap.values()].map((e) => ({
     vat: e.vat,
     nickName: e.nickName,
-    payType: 'monthly',
-    monthlySalary: 0,
-    hourlyRate: 0,
-    triennia: 0,
     weekWorkingHours: 40,
     weekWorkingDays: 5,
-    defaultRestDays: [5, 6],
   }))
 
   const incomingState = {

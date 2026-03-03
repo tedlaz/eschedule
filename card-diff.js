@@ -492,9 +492,6 @@ async function renderCardGrid() {
           nickName: displayName,
           weekWorkingHours: 40,
           weekWorkingDays: 5,
-          defaultRestDays: [5, 6],
-          payType: 'hourly',
-          hourlyRate: 0,
           _virtual: true,
         }
       }

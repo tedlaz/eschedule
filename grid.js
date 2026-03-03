@@ -94,7 +94,6 @@ function renderGrid() {
       <div class="day-abbrev">${DAY_ABBREV[dow]}</div>
       <div class="day-date">${dayDate.getDate()}/${dayDate.getMonth() + 1}</div>
       ${holidayName ? `<div class="holiday-name-hdr">${holidayName}</div>` : ''}
-      ${isHoliday || isSunday ? '<div class="premium-badge">+75%</div>' : ''}
     </th>`
   }
   html += '</tr></thead><tbody>'
@@ -109,28 +108,9 @@ function renderGrid() {
     const isVirtual = !!emp._virtual
     const empMonday = getMonday(new Date(viewStart))
     const weekHours = isVirtual ? 0 : calculateWeekHours(emp.vat, empMonday)
-    const weekCost = isVirtual
-      ? { totalCost: 0, sundayHolidayHours: 0, nightHours: 0 }
-      : calculateWeekCost(emp.vat, empMonday)
     const targetHours = isVirtual ? 0 : Number(emp.weekWorkingHours || 40)
     const hoursPercent = targetHours ? Math.min((weekHours / targetHours) * 100, 100) : 0
     const hoursClass = weekHours < targetHours ? 'danger' : weekHours > targetHours ? 'warning' : ''
-
-    const payLabel = isVirtual ? '📋' : emp.payType === 'monthly' ? 'Μ' : emp.payType === 'daily' ? 'Η' : 'Ω'
-    const payBg = isVirtual
-      ? '#fef3c7'
-      : emp.payType === 'monthly'
-        ? '#dbeafe'
-        : emp.payType === 'daily'
-          ? '#d1fae5'
-          : '#dcfce7'
-    const payColor = isVirtual
-      ? '#92400e'
-      : emp.payType === 'monthly'
-        ? '#1e40af'
-        : emp.payType === 'daily'
-          ? '#065f46'
-          : '#166534'
 
     html += `<tr class="employee-row">
       <td class="emp-name-cell"
@@ -138,15 +118,13 @@ function renderGrid() {
           ${isVirtual ? '' : 'style="cursor:pointer"'}>
         <div class="emp-name-row">
           <span class="emp-name">${employeeLabel(emp)}</span>
-          <span class="pay-badge" style="background:${payBg};color:${payColor}" title="${emp.payType || ''}">${payLabel}</span>
+          ${isVirtual ? '<span class="pay-badge" style="background:#fef3c7;color:#92400e">📋</span>' : ''}
           ${!isVirtual ? `<span class="del-emp" onclick="event.stopPropagation();deleteEmployee('${String(emp.vat)}')" title="Διαγραφή">×</span>` : ''}
         </div>
         ${
           !isVirtual && targetHours
             ? `
-        <div class="week-stats">${weekHours}h / ${targetHours}h
-          <span class="week-cost">€${weekCost.totalCost}</span>
-        </div>
+        <div class="week-stats">${weekHours}h / ${targetHours}h</div>
         <div class="hours-bar-wrap">
           <div class="hours-bar-fill ${hoursClass}" style="width:${hoursPercent.toFixed(1)}%"></div>
         </div>`
@@ -584,11 +562,8 @@ async function importCardFile(file) {
           emp = {
             vat: String(row.employee),
             nickName: displayName,
-            payType: 'hourly',
-            hourlyRate: 0,
             weekWorkingHours: 40,
             weekWorkingDays: 5,
-            defaultRestDays: [5, 6],
             _virtual: true,
           }
           cardVirtualEmployees.push(emp)
@@ -665,12 +640,9 @@ function renderEmployeeList() {
   }
   list.innerHTML = data.employees
     .map((emp) => {
-      const payLabel =
-        emp.payType === 'monthly' ? 'Μηνιαίος' : emp.payType === 'daily' ? 'Ημερήσιος' : 'Ωρομίσθιος'
       return `<div class="emp-list-item">
       <div>
         <strong>${employeeLabel(emp)}</strong>
-        <span class="pay-badge" style="margin-left:6px;font-size:11px;padding:2px 6px;border-radius:999px;background:#e0e7ff;color:#3730a3">${payLabel}</span>
         <span style="color:#888;font-size:12px;margin-left:6px">ΑΦΜ: ${emp.vat}</span>
       </div>
       <div>
@@ -1190,8 +1162,6 @@ function runScheduleCheck() {
 
   const violations = []
   const maxShiftH = window.MAX_SHIFT_HOURS || 13
-  const minMonthly = (typeof getRule === 'function' && getRule('baseMinMonthlySalary')) || 880
-  const minHourly = (typeof getRule === 'function' && getRule('baseMinHourlyRate')) || 5.86
 
   // Build the date list within range, plus one day before for boundary rest checks
   const rangeDates = []
@@ -1202,30 +1172,6 @@ function runScheduleCheck() {
   const allDates = [formatDate(prevDay), ...rangeDates]
 
   data.employees.forEach((emp) => {
-    // ── Salary below legal minimum ─────────────────────────────────────
-    const tri = 1 + Math.min(emp.triennia || 0, 3) * 0.1
-    if (emp.payType === 'monthly') {
-      const adjMin = minMonthly * ((emp.weekWorkingHours || 40) / 40) * tri
-      if ((emp.monthlySalary || 0) < adjMin - 0.005) {
-        violations.push({
-          sev: 'warn',
-          emp,
-          date: null,
-          msg: `Μισθός €${(emp.monthlySalary || 0).toFixed(2)} < ελάχιστο €${adjMin.toFixed(2)}`,
-        })
-      }
-    } else if (emp.payType === 'hourly') {
-      const adjMin = minHourly * ((emp.weekWorkingHours || 40) / 40) * tri
-      if ((emp.hourlyRate || 0) < adjMin - 0.005) {
-        violations.push({
-          sev: 'warn',
-          emp,
-          date: null,
-          msg: `Ωρομίσθιο €${(emp.hourlyRate || 0).toFixed(2)} < ελάχιστο €${adjMin.toFixed(2)}`,
-        })
-      }
-    }
-
     // ── Per-day + consecutive-day checks ──────────────────────────────
     let lastWork = null // { dateStr, endMin } — endMin relative to midnight of dateStr
 
@@ -1464,6 +1410,347 @@ function _renderCardCheckResults(violations) {
   })
 
   el.innerHTML = html + '</div>'
+}
+
+// ─── Summary modal ───────────────────────────────────────────────────────
+
+let _summaryViewMode = 'week'
+
+function openSummaryModal() {
+  const input = document.getElementById('summaryMonth')
+  if (!input.value) {
+    const now = new Date()
+    input.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }
+  document.getElementById('summaryModal').classList.add('active')
+}
+
+function renderSummary(viewMode) {
+  if (viewMode) _summaryViewMode = viewMode
+  const weekBtn = document.getElementById('summaryViewWeek')
+  const monthBtn = document.getElementById('summaryViewMonth')
+  if (weekBtn) weekBtn.style.fontWeight = _summaryViewMode === 'week' ? '700' : '400'
+  if (monthBtn) monthBtn.style.fontWeight = _summaryViewMode === 'month' ? '700' : '400'
+
+  const monthVal = document.getElementById('summaryMonth').value
+  const out = document.getElementById('summaryResults')
+  if (!monthVal) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα.</p>'; return }
+  if (!data.employees.length) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'; return }
+  out.innerHTML = _summaryViewMode === 'month' ? _renderMonthSummary(monthVal) : _renderWeekSummary(monthVal)
+}
+
+// ─── Detailed hour classification (30 buckets) ──────────────────────────
+// 5 hour-categories × 3 day-types × 2 time-of-day = 30 buckets
+const _H_CATS = ['within', 'additional', 'ye', 'yp', 'illegal']
+const _D_TYPES = ['work', 'holiday', 'sunday']
+const _T_TYPES = ['day', 'night']
+
+function _emptyBuckets() {
+  const b = {}
+  _H_CATS.forEach((c) => _D_TYPES.forEach((d) => _T_TYPES.forEach((t) => { b[`${c}_${d}_${t}`] = 0 })))
+  return b
+}
+
+function _classifyDayHours(employeeId, dateStr) {
+  const buckets = _emptyBuckets()
+  const shift = data.shifts[`${employeeId}_${dateStr}`]
+  if (!shift || !isWorkingType(shift)) return buckets
+
+  const yeThresh = getRule('dailyYeThreshold') || 8
+  const ypThresh = getRule('dailyYpThreshold') || 9
+  const illegalThresh = getRule('dailyIllegalThreshold') || 11
+  const nightStartMin = getRule('nightStartMinutes') || 1320
+  const nightEndMin = getRule('nightEndMinutes') || 360
+
+  // Day type: holiday > sunday > work
+  const date = parseISODateLocal(dateStr)
+  const dow = date.getDay()
+  let dayType = 'work'
+  if (isDateHoliday(date)) dayType = 'holiday'
+  else if (dow === 0) dayType = 'sunday'
+
+  // Walk through shift minute-by-minute
+  const intervals = [{ start: shift.start, end: shift.end }]
+  if (shift.start2 && shift.end2) intervals.push({ start: shift.start2, end: shift.end2 })
+  let cumulMin = 0
+
+  intervals.forEach((iv) => {
+    const [sh, sm] = iv.start.split(':').map(Number)
+    const [eh, em] = iv.end.split(':').map(Number)
+    let sMin = sh * 60 + sm
+    let eMin = eh * 60 + em
+    if (eMin <= sMin) eMin += 1440
+
+    for (let m = sMin; m < eMin; m++) {
+      const tod = m % 1440
+      const timeType = (tod >= nightStartMin || tod < nightEndMin) ? 'night' : 'day'
+      const h = cumulMin / 60
+      let cat
+      if (h < yeThresh) cat = 'within'
+      else if (h < ypThresh) cat = 'ye'
+      else if (h < illegalThresh) cat = 'yp'
+      else cat = 'illegal'
+
+      buckets[`${cat}_${dayType}_${timeType}`] += 1 / 60
+      cumulMin++
+    }
+  })
+
+  const r = (v) => Math.round(v * 100) / 100
+  Object.keys(buckets).forEach((k) => { buckets[k] = r(buckets[k]) })
+  return buckets
+}
+
+function _aggregateBuckets(target, source) {
+  Object.keys(source).forEach((k) => { target[k] = Math.round(((target[k] || 0) + (source[k] || 0)) * 100) / 100 })
+  return target
+}
+
+function _bucketTotal(b) {
+  let s = 0
+  Object.values(b).forEach((v) => { s += v })
+  return Math.round(s * 100) / 100
+}
+
+// Redistribute excess "within" hours to "additional" based on contract.
+// At the daily level all hours up to 8h are classified as "within".
+// This function moves the weekly/monthly excess beyond contractHours
+// from "within" to "additional" using priority fill: normal workday/day
+// hours fill Εντός first; night, holiday, sunday hours overflow last.
+function _redistributeAdditional(buckets, contractHours) {
+  // Fill order: most "normal" hours stay in Εντός first
+  const fillOrder = [
+    'within_work_day', 'within_work_night',
+    'within_holiday_day', 'within_holiday_night',
+    'within_sunday_day', 'within_sunday_night',
+  ]
+  let totalWithin = 0
+  fillOrder.forEach((k) => { totalWithin += buckets[k] || 0 })
+  totalWithin = Math.round(totalWithin * 100) / 100
+
+  if (totalWithin <= contractHours || totalWithin === 0) return buckets
+
+  let remaining = Math.round(contractHours * 100) / 100
+  fillOrder.forEach((wk) => {
+    const val = buckets[wk] || 0
+    if (remaining >= val) {
+      remaining = Math.round((remaining - val) * 100) / 100
+    } else {
+      const overflow = Math.round((val - remaining) * 100) / 100
+      buckets[wk] = Math.round(remaining * 100) / 100
+      const ak = wk.replace('within_', 'additional_')
+      buckets[ak] = Math.round(((buckets[ak] || 0) + overflow) * 100) / 100
+      remaining = 0
+    }
+  })
+  return buckets
+}
+
+function _detailedWeekBuckets(employeeId, weekStart) {
+  const totals = _emptyBuckets()
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    _aggregateBuckets(totals, _classifyDayHours(employeeId, formatDate(d)))
+  }
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+  _redistributeAdditional(totals, Number(emp?.weekWorkingHours ?? 40))
+  return totals
+}
+
+function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const isFirstPartial = weekStart < monthFirstDay
+  const isLastPartial = weekEnd > monthLastDay
+
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+  const weekContract = Number(emp?.weekWorkingHours ?? 40)
+
+  // Full week — use standard calculation
+  if (!isFirstPartial && !isLastPartial) {
+    return { buckets: _detailedWeekBuckets(employeeId, weekStart), contract: weekContract }
+  }
+
+  // Separate days into in-month and out-of-month
+  const inMonthDays = []
+  const outMonthDays = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    const ds = formatDate(d)
+    if (d >= monthFirstDay && d <= monthLastDay) {
+      inMonthDays.push(ds)
+    } else {
+      outMonthDays.push(ds)
+    }
+  }
+
+  // Classify in-month days (raw, no redistribution)
+  const inMonthBuckets = _emptyBuckets()
+  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyDayHours(employeeId, ds)))
+
+  // If no in-month working hours → contract = 0
+  if (_bucketTotal(inMonthBuckets) === 0) {
+    return { buckets: inMonthBuckets, contract: 0 }
+  }
+
+  // Partial week (first or last) — check out-of-month shifts for effective contract
+  let hasOutMonthSchedule = false
+  outMonthDays.forEach((ds) => {
+    if (data.shifts[`${employeeId}_${ds}`]) hasOutMonthSchedule = true
+  })
+
+  if (hasOutMonthSchedule) {
+    // Effective contract: out-of-month within hours consumed part of the contract
+    let outWithin = 0
+    outMonthDays.forEach((ds) => {
+      const dayB = _classifyDayHours(employeeId, ds)
+      Object.keys(dayB).forEach((k) => { if (k.startsWith('within_')) outWithin += dayB[k] })
+    })
+    outWithin = Math.round(outWithin * 100) / 100
+    const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
+    _redistributeAdditional(inMonthBuckets, effectiveContract)
+    return { buckets: inMonthBuckets, contract: effectiveContract }
+  }
+
+  // No schedule on out-of-month days: proportional contract
+  const propContract = Math.round(weekContract * inMonthDays.length / 7 * 100) / 100
+  _redistributeAdditional(inMonthBuckets, propContract)
+  return { buckets: inMonthBuckets, contract: propContract }
+}
+
+function _detailedMonthBuckets(employeeId, monthKey) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+  const totals = _emptyBuckets()
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) {
+      seen.add(key)
+      _aggregateBuckets(totals, _monthWeekBuckets(employeeId, mon, firstDay, lastDay).buckets)
+    }
+  }
+  return totals
+}
+
+// ─── Summary table rendering ─────────────────────────────────────────────
+const _thS = 'padding:3px 2px;font-size:10px;text-align:center;color:#fff;border:1px solid rgba(255,255,255,0.25);white-space:nowrap'
+const _thBg = 'background:#6366f1'
+
+function _summaryTableHead() {
+  const catLabels = ['Εντός', 'Πρόσθετη', 'Υπερεργασία', 'Υπερωρίες', 'Παράνομες']
+  const dayLabels = ['Εργ.', 'Αργία', 'Κυρ.']
+
+  let r1 = `<th rowspan="3" style="${_thS};${_thBg};text-align:left;min-width:100px;position:sticky;left:0;z-index:2">Εργαζόμενος</th>`
+  r1 += `<th rowspan="3" style="${_thS};${_thBg};min-width:34px" title="Συμβατικές ώρες">Σύμβ.</th>`
+  r1 += `<th rowspan="3" style="${_thS};${_thBg};min-width:34px" title="Σύνολο ωρών">Σύν.</th>`
+  let r2 = '', r3 = ''
+  catLabels.forEach((c) => {
+    r1 += `<th colspan="6" style="${_thS};${_thBg}">${c}</th>`
+    dayLabels.forEach((d) => {
+      r2 += `<th colspan="2" style="${_thS};${_thBg}">${d}</th>`
+      r3 += `<th style="${_thS};${_thBg}">Ημ.</th><th style="${_thS};${_thBg}">Νυχ.</th>`
+    })
+  })
+  return `<thead><tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr></thead>`
+}
+
+function _fmtV(v) {
+  if (!v) return ''
+  return v % 1 === 0 ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function _summaryRow(label, buckets, bold, contractHours) {
+  const fw = bold ? 'font-weight:700;' : ''
+  const bg = bold ? '#eef2ff' : '#fff'
+  const tdS = `text-align:center;padding:2px 3px;font-size:11px;border:1px solid #e5e7eb;${fw}`
+  let html = `<td style="${tdS};text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:${bg}">${label}</td>`
+  html += `<td style="${tdS};background:${bg}">${_fmtV(contractHours)}</td>`
+  html += `<td style="${tdS};font-weight:700;background:${bg}">${_fmtV(_bucketTotal(buckets))}</td>`
+  _H_CATS.forEach((c) => {
+    _D_TYPES.forEach((d) => {
+      _T_TYPES.forEach((t) => {
+        html += `<td style="${tdS};background:${bg}">${_fmtV(buckets[`${c}_${d}_${t}`])}</td>`
+      })
+    })
+  })
+  return `<tr>${html}</tr>`
+}
+
+
+function _renderMonthSummary(monthVal) {
+  const [year, month] = monthVal.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+
+  // Collect unique week starts
+  const weekStarts = []
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
+  }
+
+  const grandTotals = _emptyBuckets()
+  let totalContract = 0
+  let rows = ''
+  data.employees.forEach((emp) => {
+    const empBuckets = _emptyBuckets()
+    let empContract = 0
+    weekStarts.forEach((ws) => {
+      const { buckets, contract } = _monthWeekBuckets(emp.vat, ws, firstDay, lastDay)
+      _aggregateBuckets(empBuckets, buckets)
+      empContract += contract
+    })
+    empContract = Math.round(empContract * 100) / 100
+    rows += _summaryRow(employeeLabel(emp), empBuckets, false, empContract)
+    _aggregateBuckets(grandTotals, empBuckets)
+    totalContract += empContract
+  })
+  return `<table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
+    ${_summaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table>`
+}
+
+function _renderWeekSummary(monthVal) {
+  const [year, month] = monthVal.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+
+  const weekStarts = []
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
+  }
+
+  let html = ''
+  weekStarts.forEach((ws) => {
+    const wEnd = new Date(ws); wEnd.setDate(wEnd.getDate() + 6)
+    // Show in-month date range for boundary weeks
+    const rangeStart = ws < firstDay ? firstDay : ws
+    const rangeEnd = wEnd > lastDay ? lastDay : wEnd
+    const label = `${formatDate(rangeStart).slice(5)} — ${formatDate(rangeEnd).slice(5)}`
+    const grandTotals = _emptyBuckets()
+    let totalContract = 0
+    let rows = ''
+    data.employees.forEach((emp) => {
+      const { buckets, contract } = _monthWeekBuckets(emp.vat, ws, firstDay, lastDay)
+      rows += _summaryRow(employeeLabel(emp), buckets, false, contract)
+      _aggregateBuckets(grandTotals, buckets)
+      totalContract += contract
+    })
+    html += `<div style="margin-bottom:18px">
+      <div style="font-weight:600;font-size:13px;color:#374151;margin-bottom:4px">Εβδ. ${label}</div>
+      <table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
+        ${_summaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table></div>`
+  })
+  return html || '<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν δεδομένα.</p>'
 }
 
 // ─── Patch resetAllData to also reset viewStart ───────────────────────────

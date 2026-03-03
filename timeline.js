@@ -6,50 +6,57 @@ function openTimelineModal(dayIndex) {
 
 function renderTimeline() {
   // Build colored segments for a timeline shift bar
+  // Classifies hours by daily thresholds: within / ye / yp / illegal
   function buildTimelineSegments(startH, endH, isHoliday, gridStart, gridCount, employeeId, dateStr) {
     const totalDuration = endH - startH
     if (totalDuration <= 0) return ''
 
-    // Get payroll classification for this employee's shifts
-    const weekKey = getWeekKeyFromDateStr(dateStr)
-    const classified = classifyWeekSlices(employeeId, weekKey)
-      .filter((s) => (s.sourceDay || s.day) === dateStr)
-      .sort((a, b) => a.absOrder.localeCompare(b.absOrder))
+    // Calculate total worked hours for this employee on this day (across all segments)
+    const shift = data.shifts[`${employeeId}_${dateStr}`]
+    const dailyTotal = shift ? shiftTotalHours(shift) : totalDuration
 
-    // Build map: HH:MM -> category from classified slices
-    // absOrder format: YYYY-MM-DDTHH:MM-idx
-    const categoryByTime = {}
-    classified.forEach((slice) => {
-      const [datePart, timeAndIdx] = slice.absOrder.split('T')
-      const [timeStr] = timeAndIdx.split('-') // HH:MM
-      categoryByTime[timeStr] = slice.category
-    })
+    // Daily hour thresholds from payroll rules
+    const yeThresh = getRule('dailyYeThreshold') || 8
+    const ypThresh = getRule('dailyYpThreshold') || 9
+    const illegalThresh = getRule('dailyIllegalThreshold') || 11
 
-    // Get colors from config
+    // Assign category per 15-min step based on cumulative hours worked
     const colors = window.TIMELINE_COLORS || {}
-
-    // Walk through shift in 15-min steps, grouping consecutive same category
     const blocks = []
     let h = startH
-    const STEP = 0.25 // 15 minutes
+    const STEP = 0.25
+
+    // Calculate hours already worked before this segment (for split shifts)
+    let cumulBefore = 0
+    if (shift && shift.start2 && shift.end2) {
+      const s1 = parseInt(shift.start.split(':')[0]) + parseInt(shift.start.split(':')[1]) / 60
+      let e1 = parseInt(shift.end.split(':')[0]) + parseInt(shift.end.split(':')[1]) / 60
+      if (e1 <= s1) e1 += 24
+      // If this segment is the second one, count the first segment's hours
+      if (Math.abs(startH - s1) > 0.1) cumulBefore = e1 - s1
+    }
+
+    let cumul = cumulBefore
 
     while (h < endH) {
-      // Get category at this hour
-      const hh = Math.floor(h)
-      const mm = Math.round((h - hh) * 60)
-      const timeKey = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
-      let category = categoryByTime[timeKey] || 'within'
+      let category
+      if (cumul >= illegalThresh) category = 'illegal'
+      else if (cumul >= ypThresh) category = 'yp'
+      else if (cumul >= yeThresh) category = 'ye'
+      else category = 'within'
 
-      // Extend block while category doesn't change
       let blockEnd = h + STEP
+      cumul += STEP
       while (blockEnd < endH) {
-        const nextHh = Math.floor(blockEnd)
-        const nextMm = Math.round((blockEnd - nextHh) * 60)
-        const nextTimeKey = `${String(nextHh).padStart(2, '0')}:${String(nextMm).padStart(2, '0')}`
-        const nextCategory = categoryByTime[nextTimeKey] || 'within'
+        let nextCat
+        if (cumul >= illegalThresh) nextCat = 'illegal'
+        else if (cumul >= ypThresh) nextCat = 'yp'
+        else if (cumul >= yeThresh) nextCat = 'ye'
+        else nextCat = 'within'
 
-        if (nextCategory !== category) break
+        if (nextCat !== category) break
         blockEnd += STEP
+        cumul += STEP
       }
       blockEnd = Math.min(blockEnd, endH)
 
@@ -118,11 +125,10 @@ function renderTimeline() {
       ${hours.map((h) => `<div class="timeline-hour-label">${(h % 24).toString().padStart(2, '0')}:00</div>`).join('')}
     </div>
     <div style="grid-column: 1 / -1; padding: 8px; background: #f5f5f5; font-size: 0.85em; display: flex; gap: 16px; flex-wrap: wrap;">
-      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #4caf50, #388e3c); border-radius: 2px;"></div><span>Εντός</span></div>
-      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #2196f3, #1976d2); border-radius: 2px;"></div><span>Πρόσθετη</span></div>
-      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #ff9800, #f57c00); border-radius: 2px;"></div><span>Υπερεργασία</span></div>
-      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #f44336, #d32f2f); border-radius: 2px;"></div><span>Υπερωρίες</span></div>
-      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #c62828, #880e4f); border-radius: 2px;"></div><span>Παράνομη</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #4caf50, #388e3c); border-radius: 2px;"></div><span>Εντός (≤${getRule('dailyYeThreshold') || 8}ω)</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #ff9800, #f57c00); border-radius: 2px;"></div><span>Υπερεργασία (${getRule('dailyYeThreshold') || 8}–${getRule('dailyYpThreshold') || 9}ω)</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #f44336, #d32f2f); border-radius: 2px;"></div><span>Υπερωρίες (${getRule('dailyYpThreshold') || 9}–${getRule('dailyIllegalThreshold') || 11}ω)</span></div>
+      <div style="display: flex; align-items: center; gap: 6px;"><div style="width: 18px; height: 12px; background: linear-gradient(135deg, #c62828, #880e4f); border-radius: 2px;"></div><span>Παράνομη (>${getRule('dailyIllegalThreshold') || 11}ω)</span></div>
     </div>`
 
   // Staff count per hour

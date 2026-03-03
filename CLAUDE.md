@@ -5,6 +5,7 @@ Greek work schedule management app. **Client-side only** — no build step, no b
 - Pure HTML + CSS + Vanilla JavaScript
 - All JS is globally scoped (no ES modules)
 - State persisted via `localStorage` + `IndexedDB` (storage key: `eschedule_state_v1`)
+- Purpose: schedule creation, checking, and card data comparison (no payroll/monetary features)
 
 ## Critical Rules
 - **NEVER touch `index_old.html`** — it is the original UI, preserved as-is
@@ -18,43 +19,38 @@ Scripts must be loaded in this exact order (dependencies flow downward):
 ```
 config.js → adeies.js → argies.js → app-state.js → date-utils.js →
 data-storage.js → payroll.js → hours-calc.js → shift-helpers.js →
-employees.js → shifts.js → card-diff.js → business-hours.js →
-payroll-engine.js → schedule.js → grid.js → selection.js →
-timeline.js → work-rest.js → export-data.js → import-data.js →
-print-schedule.js → app.js
+employees.js → shifts.js → card-diff.js → schedule.js → timeline.js →
+import-data.js → print-schedule.js → grid.js → selection.js
 ```
 
-`app.js` is always last — it bootstraps the app in `DOMContentLoaded`.
+App initialisation is an inline `<script>` block at the end of `index.html` (no separate `app.js`).
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `index.html` | Single-page UI — all modals and layout |
+| `index.html` | Single-page UI — all modals, layout, and inline init script |
 | `style.css` | All styles |
 | `app-state.js` | Global `data` object, `DAYS`, `DAY_ABBREV`, `currentWeekStart`, selection state |
-| `app.js` | App bootstrap — `DOMContentLoaded` init, calls `applyPayrollRuleOverrides` |
 | `config.js` | `window.DEFAULT_BUSINESS_HOURS`, `window.MAX_SHIFT_HOURS`, timeline colors |
 | `adeies.js` | `window.ADEIES` — absence type definitions |
 | `argies.js` | Greek Easter algorithm + public holiday list (`greekAllHolidaysForYear`) |
-| `date-utils.js` | `getMonday`, `formatDate`, `formatDisplayDate`, `getBusinessHoursForWeek`, `autoDetectGreekHolidaysForWeek` |
+| `date-utils.js` | `getMonday`, `formatDate`, `formatDisplayDate`, `autoDetectGreekHolidaysForWeek`, `getRestDaysForEmployee` (hardcoded [5,6]) |
 | `data-storage.js` | `saveData`, `loadData`, `normalizeLoadedState`, `sanitizeStateForPersist`, `resetAllData` |
-| `payroll.js` | `PAYROLL_RULES`, `getRule()`, `applyPayrollRuleOverrides()` — **single source of truth for all pay rules** |
-| `payroll-engine.js` | Pure payroll computation — reads rules only via `getRule()` |
-| `hours-calc.js` | `calculateWeekHours`, `calculateWeekCost`, `calculateShiftHours` |
+| `payroll.js` | `PAYROLL_RULES` (night hours, daily/weekly thresholds only), `getRule()` |
+| `hours-calc.js` | `calculateWeekHours`, `calculateShiftHours`, `calculateNightHours`, `calculateWeekSummary`, `calculateMonthSummary` |
 | `shift-helpers.js` | `isWorkingType`, `isNonWorkingType`, `isPaidAbsenceType`, `absenceLabel`, `employeeLabel` |
-| `employees.js` | `openEmployeeModal`, `saveEmployee`, `deleteEmployee`, `togglePayTypeFields` |
+| `employees.js` | `openEmployeeModal`, `saveEmployee`, `deleteEmployee` |
 | `shifts.js` | `openShiftModal`, `saveShift`, `clearShift`, `toggleShiftFields`, validation |
-| `schedule.js` | `ensureRestShiftsForWeek`, `copyPreviousWeekToCurrentWeek` |
-| `grid.js` | Bar-style grid renderer; `viewStart` global, `changeView(dayDelta)` |
+| `schedule.js` | `ensureRestShiftsForWeek`, `copyPreviousWeekToCurrentWeek`, `renderSchedule` |
+| `grid.js` | Bar-style grid renderer; `viewStart`, `changeView()`, summary modal, schedule check |
 | `timeline.js` | Timeline modal and drag handlers |
 | `selection.js` | Multi-cell selection (`selectedCells`, `isMultiSelectMode`) |
-| `business-hours.js` | Business hours/rest-day modals; `getHolidayName` |
 | `card-diff.js` | `readCardFileRows`, `parseCardFile`, `roundToHalfHour`, `toMinutes` |
-| `work-rest.js` | Work/rest compliance diagram (11h daily, 24h weekly rest) |
 | `export-data.js` | JSON schedule export |
 | `import-data.js` | JSON schedule import and state merge |
 | `print-schedule.js` | Print-to-PDF via hidden iframe |
+| `payroll-engine.js` | **Not loaded** — kept as reference only (script tag removed) |
 
 ## Data Structures
 
@@ -63,12 +59,6 @@ print-schedule.js → app.js
 {
   employees: [],
   companyName: '',
-  defaultBusinessHours: { 0..6: { open, close, closed } },
-  defaultEmployeeSettings: { workingHours, restDays, hourlyRate, dailyRate },
-  payrollRules: { absencePolicies, officialHolidayPaidIfAbsent, officialHolidayPayMultiplier },
-  weekBusinessHours: {},   // key: "YYYY-MM-DD" (Monday of week)
-  weekRestDays: {},        // key: "YYYY-MM-DD_employeeId"
-  weekEmployeeSettings: {},// key: "YYYY-MM-DD_employeeVat"
   weekHolidays: {},        // key: "YYYY-MM-DD" → array of day indices 0–6
   customHolidayNames: {},  // key: "YYYY-MM-DD" → string
   shifts: {},              // key: "employeeVat_YYYY-MM-DD" → shift object
@@ -77,10 +67,8 @@ print-schedule.js → app.js
 
 ### Employee Object
 ```js
-{ vat, nickName, payType, triennia, hourlyRate, weekWorkingHours,
-  weekWorkingDays, monthlySalary, dailyRate, defaultRestDays }
+{ vat, nickName, weekWorkingHours, weekWorkingDays }
 ```
-`payType` is one of: `"hourly"`, `"monthly"`, `"daily"`
 
 ### Shift Object
 ```js
@@ -104,39 +92,34 @@ Shift key format: `"${emp.vat}_YYYY-MM-DD"`
   - Card diff: amber `seg-card` bar shown below schedule bar when card data is loaded
   - Hover title shows `HH:MM–HH:MM` per segment
 
-## Payroll Architecture
-All rules are data, not code. Never add magic numbers to the engine.
+## Schedule Rules (`payroll.js`)
+Night-work and hour threshold rules only (no monetary calculations):
+- Night window: 22:00–06:00
+- Daily thresholds: 8h (ΥΕ), 9h (ΥΠ), 11h (illegal)
+- Weekly thresholds: 40h (normal max), 45h (ΥΕ max)
+- Accessed via `getRule(key)` throughout the codebase
 
-```
-payroll.js          ← edit rules here (single source of truth)
-  └─ PAYROLL_RULES  ← all thresholds, multipliers, premium modes
-  └─ getRule(key)   ← zero-fallback accessor used by every calculation
-  └─ applyPayrollRuleOverrides()  ← merges persisted overrides on load
+## Rest Days
+Global default: Saturday (5) and Sunday (6) for all employees.
+`getRestDaysForEmployee()` always returns `[5, 6]`.
 
-payroll-engine.js   ← pure computation; reads rules only via getRule()
-hours-calc.js       ← aggregations; reads rules only via getRule()
-business-hours.js   ← settings UI; writes overrides to data.payrollRules
-app.js              ← calls applyPayrollRuleOverrides(data.payrollRules) on startup
-```
-
-## Minimum Wage Calculation
-```
-effective_min_monthly = baseMinMonthlySalary × (1 + triennia × 0.1) × (weeklyHours / 40)
-effective_min_hourly  = baseMinHourlyRate    × (1 + triennia × 0.1)
-```
-Defaults: `baseMinMonthlySalary` = €880, `baseMinHourlyRate` = €5.86 (configurable via UI).
+## Summary Modal
+`openSummaryModal()` / `renderSummary()` in `grid.js`:
+- Week view: one table per week showing per-employee hour breakdown
+- Month view: aggregated monthly totals
+- Columns: Contract, Worked, Extra, Day, Night, Sunday/Holiday, Sun/Hol Day, Sun/Hol Night
+- Calculation functions: `calculateWeekSummary()`, `calculateMonthSummary()` in `hours-calc.js`
 
 ## UI / Modals
 All modals are defined inline in `index.html`. Currently active modals:
-1. `companyModal` — company name + default business hours
-2. `employeeListModal` — employee list
-3. `employeeModal` — add/edit employee
-4. `shiftModal` — edit one shift cell
-5. `cardImportModal` — import card CSV/XLSX
-
-Settings toolbar button (⚙️🔧) opens a two-tab modal:
-- **⚙️ Ωράριο Εβδομάδας** — current-week business hours and holiday flags
-- **🔧 Προεπιλογές** — statutory minimum wages and default weekly template
+1. `employeeListModal` — employee list
+2. `employeeModal` — add/edit employee (VAT, name, hours/week, days/week)
+3. `shiftModal` — edit one shift cell
+4. `cardImportModal` — import card CSV/XLSX
+5. `scheduleModal` — load/save/check/print schedule (tabbed)
+6. `summaryModal` — hour summary per employee (week/month view)
+7. `timelineModal` — day timeline with drag handlers
+8. `workRestModal` — work/rest compliance diagram
 
 ## Running Locally
 ```bash

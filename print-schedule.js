@@ -26,12 +26,8 @@ function printSchedule() {
     .map((emp) => {
       const restDays = getRestDaysForEmployee(emp.vat)
       const weekHours = calculateWeekHours(emp.vat, currentWeekStart)
-      const targetHours =
-        emp.payType === 'monthly'
-          ? Number(emp.weekWorkingHours || 40)
-          : Number(getEmployeeWeekSettings(emp.vat).workingHours || 40)
+      const targetHours = Number(emp.weekWorkingHours || 40)
       const hoursLabel = `${weekHours}h / ${targetHours}h`
-      const payTag = emp.payType === 'monthly' ? 'Μ' : 'Ω'
 
       const cells = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(currentWeekStart)
@@ -69,7 +65,7 @@ function printSchedule() {
       }).join('')
 
       return `<tr>
-      <td class="emp-name">${employeeLabel(emp)}<span class="pay-tag">${payTag}</span><span class="emp-hours">${hoursLabel}</span></td>
+      <td class="emp-name">${employeeLabel(emp)}<span class="emp-hours">${hoursLabel}</span></td>
       ${cells}
     </tr>`
     })

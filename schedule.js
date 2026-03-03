@@ -51,25 +51,12 @@ function editCompanyName() {
 function ensureRestShiftsForWeek(weekStart) {
   const ws = new Date(weekStart)
   data.employees.forEach((emp) => {
-    const weekHours = Number(emp.weekWorkingHours || 40)
-    const weekDays = Number(emp.weekWorkingDays || 5)
-    const isPartial = weekHours < 40
-    const planned = new Set(getMonthlyPlannedDayIndexes(weekDays))
-
     for (let i = 0; i < 7; i++) {
       const d = new Date(ws)
       d.setDate(d.getDate() + i)
       const key = `${emp.vat}_${formatDate(d)}`
       if (data.shifts[key]) continue
-
-      // For part-time employees with <5 days/week, non-planned days are ΜΗ ΕΡΓΑΣΙΑ (ΜΕ)
-      if (isPartial && weekDays < 5 && !planned.has(i)) {
-        data.shifts[key] = { type: 'ΜΕ' }
-        continue
-      }
-
-      const restDays = getRestDaysForEmployee(emp.vat)
-      if (restDays.includes(i)) data.shifts[key] = { type: 'AN' }
+      if ([5, 6].includes(i)) data.shifts[key] = { type: 'AN' }
     }
   })
 }
@@ -145,18 +132,14 @@ function renderSchedule() {
                 ${DAY_ABBREV[i]}<br>
                 <small>${dayDate.getDate()}</small>
                 ${isHoliday ? `<div class="holiday-name">${getHolidayName(formatDate(dayDate))}</div>` : ''}
-                ${isHoliday || isSunday ? '<div class="premium-badge">+75%</div>' : ''}
             </th>`
   }
   html += '</tr></thead><tbody>'
 
   // Employee rows
   data.employees.forEach((emp) => {
-    const weekSettings = getEmployeeWeekSettings(emp.vat)
     const weekHours = calculateWeekHours(emp.vat, currentWeekStart)
-    const weekCost = calculateWeekCost(emp.vat, currentWeekStart)
-    const targetHours =
-      emp.payType === 'monthly' ? Number(emp.weekWorkingHours || 40) : Number(weekSettings.workingHours || 40)
+    const targetHours = Number(emp.weekWorkingHours || 40)
     const hoursPercent = Math.min((weekHours / (targetHours || 1)) * 100, 100)
     let hoursClass = ''
     if (weekHours < targetHours) hoursClass = 'danger'
@@ -164,19 +147,14 @@ function renderSchedule() {
 
     const restDays = getRestDaysForEmployee(emp.vat)
 
-    let costTooltip = `Ωρες: ${weekCost.totalHours}h | Κόστος: €${weekCost.totalCost}`
-    if (weekCost.sundayHolidayHours > 0) costTooltip += ` | Κυρ/Αργ: ${weekCost.sundayHolidayHours}h`
-    if (weekCost.nightHours > 0) costTooltip += ` | Νυχτ: ${weekCost.nightHours}h`
-
     html += `<tr class="employee-row">
-                <td class="employee-name" onclick="openEmployeeModal('${String(emp.vat)}')" style="cursor: pointer;" title="${costTooltip}">
-                    ${employeeLabel(emp)} <span style="font-size:11px; padding:2px 6px; border-radius:999px; background:${emp.payType === 'monthly' ? '#dbeafe' : '#dcfce7'}; color:${emp.payType === 'monthly' ? '#1e40af' : '#166534'}; font-weight:700;">${emp.payType === 'monthly' ? 'Μ' : 'Ω'}</span>
+                <td class="employee-name" onclick="openEmployeeModal('${String(emp.vat)}')" style="cursor: pointer;">
+                    ${employeeLabel(emp)}
                     <span class="delete-employee" onclick="event.stopPropagation(); deleteEmployee('${String(emp.vat)}')" title="Delete employee">×</span>
                     <div class="employee-hours">${weekHours}h / ${targetHours}h</div>
                     <div class="hours-bar">
                         <div class="hours-fill ${hoursClass}" style="width: ${hoursPercent}%"></div>
                     </div>
-                    <div class="employee-cost">€${weekCost.totalCost}${weekCost.sundayHolidayHours > 0 ? ' <span class="badge-sunday">☀' + weekCost.sundayHolidayHours + 'h</span>' : ''}${weekCost.nightHours > 0 ? ' <span class="badge-night">🌙' + weekCost.nightHours + 'h</span>' : ''}</div>
                 </td>`
 
     for (let i = 0; i < 7; i++) {

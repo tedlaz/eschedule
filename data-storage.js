@@ -97,22 +97,12 @@ function shiftTypePriority(shift) {
 function sanitizeStateForPersist(state) {
   const out = { ...state }
 
-  out.employees = (state.employees || []).map((e) => {
-    const base = {
-      vat: String(e.vat || '').trim(),
-      nickName: String(e.nickName || '').trim(),
-      payType: e.payType === 'monthly' ? 'monthly' : 'hourly',
-      weekWorkingHours: Number(e.weekWorkingHours || 40),
-      weekWorkingDays: Number(e.weekWorkingDays || 5),
-      defaultRestDays: Array.isArray(e.defaultRestDays) ? e.defaultRestDays : [5, 6],
-    }
-    if (base.payType === 'hourly') {
-      base.hourlyRate = Number(e.hourlyRate || 0)
-    } else {
-      base.monthlySalary = Number(e.monthlySalary || 0)
-    }
-    return base
-  })
+  out.employees = (state.employees || []).map((e) => ({
+    vat: String(e.vat || '').trim(),
+    nickName: String(e.nickName || '').trim(),
+    weekWorkingHours: Number(e.weekWorkingHours || 40),
+    weekWorkingDays: Number(e.weekWorkingDays || 5),
+  }))
 
   const normalizedShiftEntries = []
   const shiftKeyRe = /^(.+?)_(\d{4}-\d{2}-\d{2})$/
@@ -220,9 +210,11 @@ function sanitizeStateForPersist(state) {
     })
   out.customHolidayNames = cleanCustomNames
   out.companyName = String(state.companyName || '')
-  out.weekRestDays = {}
-  out.weekEmployeeSettings = {}
   out.__meta = { savedAt: Date.now() }
+  delete out.weekRestDays
+  delete out.weekEmployeeSettings
+  delete out.payrollRules
+  delete out.defaultEmployeeSettings
 
   return out
 }
@@ -293,55 +285,14 @@ function normalizeLoadedState(loaded) {
 
   if (loaded.employees) {
     loaded.employees = loaded.employees.map((emp) => ({
-      ...emp,
-      payType: ['hourly', 'monthly', 'daily'].includes(emp.payType) ? emp.payType : 'hourly',
       vat: String(emp.vat || '').trim(),
       nickName: String(emp.nickName || '').trim(),
-      hourlyRate: Number(emp.hourlyRate ?? 0),
       weekWorkingHours: Number(emp.weekWorkingHours ?? emp.workingHours ?? 40),
       weekWorkingDays: Number(emp.weekWorkingDays ?? 5),
-      monthlySalary: Number(emp.monthlySalary ?? 0),
-      dailyRate: Number(emp.dailyRate ?? 0),
-      defaultRestDays: emp.defaultRestDays || emp.restDays || [5, 6],
     }))
   }
-  const payrollRules = loaded.payrollRules || {}
   return {
     employees: loaded.employees || [],
-    defaultEmployeeSettings: loaded.defaultEmployeeSettings
-      ? {
-          ...loaded.defaultEmployeeSettings,
-          workingHours: getWorkingHours(loaded.defaultEmployeeSettings, 40),
-        }
-      : {
-          workingHours: 40,
-          restDays: [5, 6],
-          hourlyRate: 10,
-        },
-    payrollRules: {
-      absencePolicies: {
-        holiday: {
-          paid: payrollRules.absencePolicies?.holiday?.paid ?? true,
-          multiplier: Number(payrollRules.absencePolicies?.holiday?.multiplier ?? 1),
-        },
-        sick: {
-          paid: payrollRules.absencePolicies?.sick?.paid ?? false,
-          multiplier: Number(payrollRules.absencePolicies?.sick?.multiplier ?? 0),
-        },
-        other: {
-          paid: payrollRules.absencePolicies?.other?.paid ?? false,
-          multiplier: Number(payrollRules.absencePolicies?.other?.multiplier ?? 0),
-        },
-      },
-      officialHolidayPaidIfAbsent: payrollRules.officialHolidayPaidIfAbsent ?? true,
-      officialHolidayPayMultiplier: Number(payrollRules.officialHolidayPayMultiplier ?? 1),
-      baseMinMonthlySalary:
-        payrollRules.baseMinMonthlySalary != null ? Number(payrollRules.baseMinMonthlySalary) : undefined,
-      baseMinHourlyRate:
-        payrollRules.baseMinHourlyRate != null ? Number(payrollRules.baseMinHourlyRate) : undefined,
-    },
-    weekRestDays: loaded.weekRestDays || {},
-    weekEmployeeSettings: loaded.weekEmployeeSettings || {},
     weekHolidays: loaded.weekHolidays || {},
     customHolidayNames: loaded.customHolidayNames || {},
     companyName: String(loaded.companyName || ''),
@@ -383,16 +334,6 @@ async function loadData() {
 
     const loaded = pickBestSnapshot([localPrimary, idbRaw])
     data = normalizeLoadedState(loaded)
-
-    // Restore user-edited minimum salary/rate into window.PAYROLL_RULES
-    if (data.payrollRules?.baseMinMonthlySalary != null) {
-      window.PAYROLL_RULES = window.PAYROLL_RULES || {}
-      window.PAYROLL_RULES.baseMinMonthlySalary = data.payrollRules.baseMinMonthlySalary
-    }
-    if (data.payrollRules?.baseMinHourlyRate != null) {
-      window.PAYROLL_RULES = window.PAYROLL_RULES || {}
-      window.PAYROLL_RULES.baseMinHourlyRate = data.payrollRules.baseMinHourlyRate
-    }
 
     // self-heal all backends with chosen snapshot
     const payload = JSON.stringify(sanitizeStateForPersist(data))
