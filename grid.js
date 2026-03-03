@@ -174,7 +174,9 @@ function renderGrid() {
       const isHolSun = isDateSundayOrHoliday(dayDate)
       const isGapCell = !isVirtual && (!shift || shift.type === 'AN')
       const isWorkCell = !isVirtual && shift && isWorkingType(shift)
-      const gapHours = isGapCell ? getInterShiftGapHours(emp.vat, dateStr) : null
+      // Only show gap labels when they are a violation (< 11h legal minimum)
+      const gapHoursRaw = isGapCell ? getInterShiftGapHours(emp.vat, dateStr) : null
+      const gapHours = gapHoursRaw !== null && gapHoursRaw < 11 ? gapHoursRaw : null
       // Only show prevGapH on work cells when the previous day was also a work day
       // (no adjacent gap cell already showing the same interval)
       let prevGapH = null
@@ -183,7 +185,8 @@ function renderGrid() {
         prevDate.setDate(prevDate.getDate() - 1)
         const prevShift = data.shifts[`${emp.vat}_${formatDate(prevDate)}`]
         if (prevShift && isWorkingType(prevShift)) {
-          prevGapH = getGapToPrevShift(emp.vat, dateStr, shift.start)
+          const raw = getGapToPrevShift(emp.vat, dateStr, shift.start)
+          prevGapH = raw !== null && raw < 11 ? raw : null
         }
       }
 
@@ -194,13 +197,16 @@ function renderGrid() {
       const isSelected = !isVirtual && selectedCells.some(
         (c) => c.employeeId === String(emp.vat) && c.dateStr === dateStr
       )
+      // Card rest gap: only show when < 11h (violation)
+      const cardGapRaw = cardEntry ? getGapToPrevCardEntry(emp.vat, dateStr) : null
+      const cardGapH = cardGapRaw !== null && cardGapRaw < 11 ? cardGapRaw : null
 
       html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}${isSelected ? ' cell-selected' : ''}"
                    data-vat="${emp.vat}"
                    data-date="${dateStr}"
                    onclick="handleDayCellClick(event,'${String(emp.vat)}','${dateStr}')">
         ${renderShiftBar(shift, isHolSun, gapHours, prevGapH)}
-        ${cardEntry ? renderCardBar(cardEntry, isIllegalCard, monthMissing) : ''}
+        ${cardEntry ? renderCardBar(cardEntry, isIllegalCard, monthMissing, cardGapH) : ''}
       </td>`
     }
     html += '</tr>'
@@ -224,6 +230,27 @@ function getGapToPrevShift(vat, dateStr, shiftStart) {
     const s = data.shifts[`${vat}_${formatDate(d)}`]
     if (s && isWorkingType(s) && s.end) {
       const [eh, em] = s.end.split(':').map(Number)
+      const prevEndMin = -(i * 1440) + eh * 60 + em
+      return Math.round(((startMin - prevEndMin) / 60) * 10) / 10
+    }
+  }
+  return null
+}
+
+// Returns the gap in hours from the previous card entry end to cardStart on
+// dateStr for the same employee.  Used to flag < 11h rest violations on cards.
+function getGapToPrevCardEntry(vat, dateStr) {
+  const entry = cardData[`${vat}_${dateStr}`]
+  if (!entry || !entry.start) return null
+  const [sh, sm] = entry.start.split(':').map(Number)
+  const startMin = sh * 60 + sm
+  const date = parseISODateLocal(dateStr)
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(date)
+    d.setDate(d.getDate() - i)
+    const prev = cardData[`${vat}_${formatDate(d)}`]
+    if (prev && prev.end) {
+      const [eh, em] = prev.end.split(':').map(Number)
       const prevEndMin = -(i * 1440) + eh * 60 + em
       return Math.round(((startMin - prevEndMin) / 60) * 10) / 10
     }
@@ -321,7 +348,7 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
   // Show gap from previous shift end to start of today's first segment
   const firstSm = segs[0].sm
   if (prevGapH != null && firstSm > 0) {
-    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(firstSm)}" title="από προηγ. βάρδια: ${prevGapH}h"><span class="gap-lbl">${prevGapH}</span></div>`
+    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(firstSm)}" title="από προηγ. βάρδια: ${prevGapH}h"><span class="gap-lbl" style="color:#dc2626">${prevGapH}</span></div>`
   }
 
   segs.forEach((s, idx) => {
@@ -345,7 +372,8 @@ function _buildWorkBar(shift, isHolSun, prevGapH) {
 // ─── Card bar ─────────────────────────────────────────────────────────────
 // illegal: card entry exists but no working shift scheduled (labour-law violation)
 // missingCount: monthly count of guessed entries for this employee (limit: 3/month)
-function renderCardBar(entry, illegal = false, missingCount = 0) {
+// prevGapH: hours since previous card entry end (shown only when < 11h — violation)
+function renderCardBar(entry, illegal = false, missingCount = 0, prevGapH = null) {
   if (!entry) return ''
   const sm = toMinutes(entry.start)
   let em = toMinutes(entry.end)
@@ -361,7 +389,12 @@ function renderCardBar(entry, illegal = false, missingCount = 0) {
     ? 'seg seg-card-illegal'
     : `seg seg-card${entry.guessed ? ' seg-card-flash' : ''}`
 
-  const segHtml = `<div class="${segCls}" style="left:${pct(sm)};width:${pct(em - sm)}" title="${title}">${hoursLabel}</div>`
+  let segHtml = ''
+  // Show gap from previous card entry when it's a violation (< 11h)
+  if (prevGapH !== null && sm > 0) {
+    segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(sm)}" title="από προηγ. κάρτα: ${prevGapH}h"><span class="gap-lbl" style="color:#dc2626">${prevGapH}</span></div>`
+  }
+  segHtml += `<div class="${segCls}" style="left:${pct(sm)};width:${pct(em - sm)}" title="${title}">${hoursLabel}</div>`
 
   const illegalBadge = illegal
     ? `<span class="card-illegal-badge" title="Προσοχή: Εργάστηκε χωρίς πρόγραμμα">!</span>`
