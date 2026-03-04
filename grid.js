@@ -225,7 +225,9 @@ function getGapToPrevCardEntry(vat, dateStr) {
     d.setDate(d.getDate() - i)
     const prev = cardData[`${vat}_${formatDate(d)}`]
     if (prev && prev.end) {
-      const [eh, em] = prev.end.split(':').map(Number)
+      // Use latest end time (end2 if double entry, otherwise end)
+      const lastEnd = (prev.end2 && prev.start2) ? prev.end2 : prev.end
+      const [eh, em] = lastEnd.split(':').map(Number)
       const prevEndMin = -(i * 1440) + eh * 60 + em
       return Math.round(((startMin - prevEndMin) / 60) * 10) / 10
     }
@@ -409,10 +411,25 @@ function renderCardBar(entry, illegal = false, missingCount = 0, prevGapH = null
   if (sm === null || em === null) return ''
   if (em <= sm) em += 1440
 
-  const hours = (em - sm) / 60
+  const intervals = [{ start: entry.start, end: entry.end, sMin: sm, eMin: em }]
+  if (entry.start2 && entry.end2) {
+    const sm2 = toMinutes(entry.start2)
+    let em2 = toMinutes(entry.end2)
+    if (sm2 !== null && em2 !== null) {
+      if (em2 <= sm2) em2 += 1440
+      intervals.push({ start: entry.start2, end: entry.end2, sMin: sm2, eMin: em2 })
+    }
+  }
+
+  let totalMin = 0
+  intervals.forEach((iv) => { totalMin += iv.eMin - iv.sMin })
+  const hours = totalMin / 60
   const hoursLabel = hours >= 1 ? `<span class="seg-lbl">${Math.round(hours * 10) / 10}</span>` : ''
+
   const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
-  const title = `📋 ${entry.start}–${entry.end}${guessNote}`
+  const titleParts = [`📋 ${entry.start}–${entry.end}`]
+  if (entry.start2 && entry.end2) titleParts.push(`${entry.start2}–${entry.end2}`)
+  const title = titleParts.join(' + ') + guessNote
   // Illegal entries use red stripes; guessed-but-legal entries flash amber
   const segCls = illegal
     ? 'seg seg-card-illegal'
@@ -423,7 +440,12 @@ function renderCardBar(entry, illegal = false, missingCount = 0, prevGapH = null
   if (prevGapH !== null && sm > 0) {
     segHtml += `<div class="seg seg-gap" style="left:0;width:${pct(sm)}" title="από προηγ. κάρτα: ${prevGapH}h"><span class="gap-lbl" style="color:#dc2626">${prevGapH}</span></div>`
   }
-  segHtml += `<div class="${segCls}" style="left:${pct(sm)};width:${pct(em - sm)}" title="${title}">${hoursLabel}</div>`
+  // First interval — show hours label on this segment
+  segHtml += `<div class="${segCls}" style="left:${pct(intervals[0].sMin)};width:${pct(intervals[0].eMin - intervals[0].sMin)}" title="${title}">${hoursLabel}</div>`
+  // Second interval (if present)
+  if (intervals.length > 1) {
+    segHtml += `<div class="${segCls}" style="left:${pct(intervals[1].sMin)};width:${pct(intervals[1].eMin - intervals[1].sMin)}" title="${title}"></div>`
+  }
 
   const illegalBadge = illegal
     ? `<span class="card-illegal-badge" title="Προσοχή: Εργάστηκε χωρίς πρόγραμμα">!</span>`
@@ -521,6 +543,9 @@ function exportCardData() {
         firstName = parts.slice(1).join(' ') || ''
       }
       sheetRows.push([vat, surname, firstName, date, entry.start, entry.end])
+      if (entry.start2 && entry.end2) {
+        sheetRows.push([vat, surname, firstName, date, entry.start2, entry.end2])
+      }
     })
 
   const ws = XLSX.utils.aoa_to_sheet(sheetRows)
@@ -598,12 +623,22 @@ async function importCardFile(file) {
         guessedStart = true
       }
       if (!inTime || !outTime) return // both still missing — skip
-      cardData[key] = {
-        start: inTime,
-        end: outTime,
-        guessedStart,
-        guessedEnd,
-        guessed: guessedStart || guessedEnd,
+
+      if (cardData[key]) {
+        // Second entry for same employee+day → store as start2/end2
+        cardData[key].start2 = inTime
+        cardData[key].end2 = outTime
+        cardData[key].guessedStart2 = guessedStart
+        cardData[key].guessedEnd2 = guessedEnd
+        if (guessedStart || guessedEnd) cardData[key].guessed = true
+      } else {
+        cardData[key] = {
+          start: inTime,
+          end: outTime,
+          guessedStart,
+          guessedEnd,
+          guessed: guessedStart || guessedEnd,
+        }
       }
     })
 
@@ -696,6 +731,16 @@ function openCardTimeEdit(key) {
   const entry = cardData[key] || {}
   document.getElementById('cardEditIn').value = entry.start || ''
   document.getElementById('cardEditOut').value = entry.end || ''
+  const row2 = document.getElementById('cardEdit2ndRow')
+  if (entry.start2 && entry.end2) {
+    document.getElementById('cardEditIn2').value = entry.start2 || ''
+    document.getElementById('cardEditOut2').value = entry.end2 || ''
+    row2.style.display = ''
+  } else {
+    document.getElementById('cardEditIn2').value = ''
+    document.getElementById('cardEditOut2').value = ''
+    row2.style.display = 'none'
+  }
   document.getElementById('cardEditModal').classList.add('active')
 }
 
@@ -704,13 +749,20 @@ function saveCardTimeEdit() {
   const inVal = document.getElementById('cardEditIn').value
   const outVal = document.getElementById('cardEditOut').value
   if (!inVal || !outVal) return
-  cardData[_editingCardKey] = {
+  const entry = {
     start: inVal,
     end: outVal,
     guessedStart: false,
     guessedEnd: false,
     guessed: false,
   }
+  const in2Val = document.getElementById('cardEditIn2').value
+  const out2Val = document.getElementById('cardEditOut2').value
+  if (in2Val && out2Val) {
+    entry.start2 = in2Val
+    entry.end2 = out2Val
+  }
+  cardData[_editingCardKey] = entry
   closeModal('cardEditModal')
   renderTimeline()
   renderGrid()
@@ -845,11 +897,14 @@ function _appendCardDataToTimeline(dateStr) {
     const bar = document.createElement('div')
     bar.className = 'timeline-shift-bar'
     const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
+    const titleParts = [`📋 ${entry.start}–${entry.end}`]
+    if (entry.start2 && entry.end2) titleParts.push(`${entry.start2}–${entry.end2}`)
+    const fullTitle = titleParts.join(' + ') + guessNote
     const barBg = entry.guessed
       ? 'repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px)'
       : 'linear-gradient(135deg,#fbbf24,#d97706)'
     bar.style.cssText = `left:${leftPct.toFixed(2)}%;width:${Math.max(widthPct, 2).toFixed(2)}%;background:${barBg};cursor:pointer`
-    bar.title = `📋 ${entry.start}–${entry.end}${guessNote}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
+    bar.title = `${fullTitle}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
     bar.setAttribute('data-card-key', `${vat}_${rowDate}`)
     bar.setAttribute('data-hours-start', hoursStart)
     bar.setAttribute('data-hours-count', hoursCount)
@@ -878,6 +933,34 @@ function _appendCardDataToTimeline(dateStr) {
     }
 
     hoursDiv.appendChild(bar)
+
+    // Second interval bar (if double card entry)
+    if (entry.start2 && entry.end2) {
+      const sm2Min = toMinutes(entry.start2)
+      let em2Min = toMinutes(entry.end2)
+      if (sm2Min !== null && em2Min !== null) {
+        if (em2Min <= sm2Min) em2Min += 24 * 60
+        const sm2H = sm2Min / 60
+        const em2H = em2Min / 60
+        const left2 = Math.max(0, ((sm2H - hoursStart) / hoursCount) * 100)
+        const width2 = Math.min(100 - left2, ((em2H - sm2H) / hoursCount) * 100)
+        const bar2 = document.createElement('div')
+        bar2.className = 'timeline-shift-bar'
+        const bar2Bg = entry.guessed
+          ? 'repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px)'
+          : 'linear-gradient(135deg,#fbbf24,#d97706)'
+        bar2.style.cssText = `left:${left2.toFixed(2)}%;width:${Math.max(width2, 2).toFixed(2)}%;background:${bar2Bg};cursor:pointer`
+        bar2.title = fullTitle
+        bar2.onclick = (e) => {
+          if (!e.target.dataset.handle) openCardTimeEdit(`${vat}_${rowDate}`)
+        }
+        const lbl2 = document.createElement('div')
+        lbl2.className = 'time-label'
+        lbl2.textContent = `${entry.start2} - ${entry.end2}`
+        bar2.appendChild(lbl2)
+        hoursDiv.appendChild(bar2)
+      }
+    }
 
     row.appendChild(nameDiv)
     row.appendChild(hoursDiv)
@@ -945,11 +1028,14 @@ function _appendCardDataToTimeline(dateStr) {
     const bar = document.createElement('div')
     bar.className = 'timeline-shift-bar'
     const guessNote = entry.guessedStart ? ' (εκτ. έναρξη)' : entry.guessedEnd ? ' (εκτ. λήξη)' : ''
+    const stTitleParts = [`📋 ${entry.start}–${entry.end}`]
+    if (entry.start2 && entry.end2) stTitleParts.push(`${entry.start2}–${entry.end2}`)
+    const stFullTitle = stTitleParts.join(' + ') + guessNote
     const barBg = entry.guessed
       ? 'repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px)'
       : 'linear-gradient(135deg,#fbbf24,#d97706)'
     bar.style.cssText = `left:${leftPct.toFixed(2)}%;width:${Math.max(widthPct, 2).toFixed(2)}%;background:${barBg};cursor:pointer`
-    bar.title = `📋 ${entry.start}–${entry.end}${guessNote}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
+    bar.title = `${stFullTitle}${entry.guessed ? ' — σύρετε άκρο για διόρθωση' : ' — κλικ για επεξεργασία'}`
     bar.setAttribute('data-card-key', key)
     bar.setAttribute('data-hours-start', hoursStart)
     bar.setAttribute('data-hours-count', hoursCount)
@@ -976,6 +1062,31 @@ function _appendCardDataToTimeline(dateStr) {
     }
 
     hoursDiv.appendChild(bar)
+
+    // Second interval bar (if double card entry)
+    if (entry.start2 && entry.end2) {
+      const sm2Min = toMinutes(entry.start2)
+      let em2Min = toMinutes(entry.end2)
+      if (sm2Min !== null && em2Min !== null) {
+        if (em2Min <= sm2Min) em2Min += 24 * 60
+        const sm2H = sm2Min / 60
+        const em2H = em2Min / 60
+        const left2 = Math.max(0, ((sm2H - hoursStart) / hoursCount) * 100)
+        const width2 = Math.min(100 - left2, ((em2H - sm2H) / hoursCount) * 100)
+        const bar2 = document.createElement('div')
+        bar2.className = 'timeline-shift-bar'
+        bar2.style.cssText = `left:${left2.toFixed(2)}%;width:${Math.max(width2, 2).toFixed(2)}%;background:${barBg};cursor:pointer`
+        bar2.title = stFullTitle
+        bar2.onclick = (e) => {
+          if (!e.target.dataset.handle) openCardTimeEdit(key)
+        }
+        const lbl2 = document.createElement('div')
+        lbl2.className = 'time-label'
+        lbl2.textContent = `${entry.start2} - ${entry.end2}`
+        bar2.appendChild(lbl2)
+        hoursDiv.appendChild(bar2)
+      }
+    }
     row.appendChild(nameDiv)
     row.appendChild(hoursDiv)
     grid.appendChild(row)
@@ -1069,15 +1180,20 @@ function _cardBarMouseUp() {
 
   if (newStart && newEnd) {
     const entry = cardData[cardKey] || {}
-    // Keep guessed flags unchanged — the bar stays striped and draggable.
+    // Keep guessed flags and second interval unchanged — the bar stays striped and draggable.
     // Flags are only cleared when the user explicitly saves via the edit modal.
-    cardData[cardKey] = {
+    const updated = {
       start: newStart,
       end: newEnd,
       guessedStart: entry.guessedStart,
       guessedEnd: entry.guessedEnd,
       guessed: entry.guessed,
     }
+    if (entry.start2 && entry.end2) {
+      updated.start2 = entry.start2
+      updated.end2 = entry.end2
+    }
+    cardData[cardKey] = updated
     renderTimeline()
     renderGrid()
   }
@@ -1346,7 +1462,7 @@ function runCardCheck() {
             sev: 'error',
             emp,
             date: dateStr,
-            msg: `Κάρτα χωρίς προγραμματισμένη εργασία (${entry.start}–${entry.end})`,
+            msg: `Κάρτα χωρίς προγραμματισμένη εργασία (${entry.start}–${entry.end}${entry.start2 && entry.end2 ? ' + ' + entry.start2 + '–' + entry.end2 : ''})`,
           })
         }
       })
@@ -1427,16 +1543,28 @@ function openSummaryModal() {
 
 function renderSummary(viewMode) {
   if (viewMode) _summaryViewMode = viewMode
-  const weekBtn = document.getElementById('summaryViewWeek')
-  const monthBtn = document.getElementById('summaryViewMonth')
-  if (weekBtn) weekBtn.style.fontWeight = _summaryViewMode === 'week' ? '700' : '400'
-  if (monthBtn) monthBtn.style.fontWeight = _summaryViewMode === 'month' ? '700' : '400'
+  const modes = ['week', 'month', 'cardWeek', 'cardMonth']
+  const btnIds = ['summaryViewWeek', 'summaryViewMonth', 'summaryViewCardWeek', 'summaryViewCardMonth']
+  modes.forEach((m, i) => {
+    const btn = document.getElementById(btnIds[i])
+    if (btn) btn.style.fontWeight = _summaryViewMode === m ? '700' : '400'
+  })
 
   const monthVal = document.getElementById('summaryMonth').value
   const out = document.getElementById('summaryResults')
   if (!monthVal) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα.</p>'; return }
-  if (!data.employees.length) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'; return }
-  out.innerHTML = _summaryViewMode === 'month' ? _renderMonthSummary(monthVal) : _renderWeekSummary(monthVal)
+
+  const isCard = _summaryViewMode === 'cardWeek' || _summaryViewMode === 'cardMonth'
+  if (!isCard && !data.employees.length) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'; return }
+  if (isCard && !Object.keys(cardData).length) { out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν δεδομένα κάρτας.</p>'; return }
+
+  const renderers = {
+    week: _renderWeekSummary,
+    month: _renderMonthSummary,
+    cardWeek: _renderWeekCardSummary,
+    cardMonth: _renderMonthCardSummary,
+  }
+  out.innerHTML = renderers[_summaryViewMode](monthVal)
 }
 
 // ─── Detailed hour classification (30 buckets) ──────────────────────────
@@ -1637,6 +1765,125 @@ function _detailedMonthBuckets(employeeId, monthKey) {
   return totals
 }
 
+// ─── Card-based hour classification (mirrors schedule classification) ────
+
+function _classifyCardDayHours(employeeId, dateStr) {
+  const buckets = _emptyBuckets()
+  const entry = cardData[`${employeeId}_${dateStr}`]
+  if (!entry || !entry.start || !entry.end) return buckets
+
+  const yeThresh = getRule('dailyYeThreshold') || 8
+  const ypThresh = getRule('dailyYpThreshold') || 9
+  const illegalThresh = getRule('dailyIllegalThreshold') || 11
+  const nightStartMin = getRule('nightStartMinutes') || 1320
+  const nightEndMin = getRule('nightEndMinutes') || 360
+
+  const date = parseISODateLocal(dateStr)
+  const dow = date.getDay()
+  let dayType = 'work'
+  if (isDateHoliday(date)) dayType = 'holiday'
+  else if (dow === 0) dayType = 'sunday'
+
+  const intervals = [{ start: entry.start, end: entry.end }]
+  if (entry.start2 && entry.end2) intervals.push({ start: entry.start2, end: entry.end2 })
+  let cumulMin = 0
+
+  intervals.forEach((iv) => {
+    const [sh, sm] = iv.start.split(':').map(Number)
+    const [eh, em] = iv.end.split(':').map(Number)
+    let sMin = sh * 60 + sm
+    let eMin = eh * 60 + em
+    if (eMin <= sMin) eMin += 1440
+
+    for (let m = sMin; m < eMin; m++) {
+      const tod = m % 1440
+      const timeType = (tod >= nightStartMin || tod < nightEndMin) ? 'night' : 'day'
+      const h = cumulMin / 60
+      let cat
+      if (h < yeThresh) cat = 'within'
+      else if (h < ypThresh) cat = 'ye'
+      else if (h < illegalThresh) cat = 'yp'
+      else cat = 'illegal'
+      buckets[`${cat}_${dayType}_${timeType}`] += 1 / 60
+      cumulMin++
+    }
+  })
+
+  const r = (v) => Math.round(v * 100) / 100
+  Object.keys(buckets).forEach((k) => { buckets[k] = r(buckets[k]) })
+  return buckets
+}
+
+function _detailedWeekCardBuckets(employeeId, weekStart) {
+  const totals = _emptyBuckets()
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    _aggregateBuckets(totals, _classifyCardDayHours(employeeId, formatDate(d)))
+  }
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+    || cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
+  _redistributeAdditional(totals, Number(emp?.weekWorkingHours ?? 40))
+  return totals
+}
+
+function _monthWeekCardBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const isFirstPartial = weekStart < monthFirstDay
+  const isLastPartial = weekEnd > monthLastDay
+
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+    || cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
+  const weekContract = Number(emp?.weekWorkingHours ?? 40)
+
+  if (!isFirstPartial && !isLastPartial) {
+    return { buckets: _detailedWeekCardBuckets(employeeId, weekStart), contract: weekContract }
+  }
+
+  const inMonthDays = []
+  const outMonthDays = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + i)
+    const ds = formatDate(d)
+    if (d >= monthFirstDay && d <= monthLastDay) {
+      inMonthDays.push(ds)
+    } else {
+      outMonthDays.push(ds)
+    }
+  }
+
+  const inMonthBuckets = _emptyBuckets()
+  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyCardDayHours(employeeId, ds)))
+
+  if (_bucketTotal(inMonthBuckets) === 0) {
+    return { buckets: inMonthBuckets, contract: 0 }
+  }
+
+  // Check out-of-month card entries for effective contract
+  let hasOutMonthData = false
+  outMonthDays.forEach((ds) => {
+    if (cardData[`${employeeId}_${ds}`]) hasOutMonthData = true
+  })
+
+  if (hasOutMonthData) {
+    let outWithin = 0
+    outMonthDays.forEach((ds) => {
+      const dayB = _classifyCardDayHours(employeeId, ds)
+      Object.keys(dayB).forEach((k) => { if (k.startsWith('within_')) outWithin += dayB[k] })
+    })
+    outWithin = Math.round(outWithin * 100) / 100
+    const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
+    _redistributeAdditional(inMonthBuckets, effectiveContract)
+    return { buckets: inMonthBuckets, contract: effectiveContract }
+  }
+
+  const propContract = Math.round(weekContract * inMonthDays.length / 7 * 100) / 100
+  _redistributeAdditional(inMonthBuckets, propContract)
+  return { buckets: inMonthBuckets, contract: propContract }
+}
+
 // ─── Summary table rendering ─────────────────────────────────────────────
 const _thS = 'padding:3px 2px;font-size:10px;text-align:center;color:#fff;border:1px solid rgba(255,255,255,0.25);white-space:nowrap'
 const _thBg = 'background:#6366f1'
@@ -1751,6 +1998,112 @@ function _renderWeekSummary(monthVal) {
         ${_summaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table></div>`
   })
   return html || '<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν δεδομένα.</p>'
+}
+
+// ─── Card summary rendering ─────────────────────────────────────────────
+
+const _thCardBg = 'background:#b45309'
+
+function _cardSummaryTableHead() {
+  const catLabels = ['Εντός', 'Πρόσθετη', 'Υπερεργασία', 'Υπερωρίες', 'Παράνομες']
+  const dayLabels = ['Εργ.', 'Αργία', 'Κυρ.']
+
+  let r1 = `<th rowspan="3" style="${_thS};${_thCardBg};text-align:left;min-width:100px;position:sticky;left:0;z-index:2">Εργαζόμενος</th>`
+  r1 += `<th rowspan="3" style="${_thS};${_thCardBg};min-width:34px" title="Συμβατικές ώρες">Σύμβ.</th>`
+  r1 += `<th rowspan="3" style="${_thS};${_thCardBg};min-width:34px" title="Σύνολο ωρών">Σύν.</th>`
+  let r2 = '', r3 = ''
+  catLabels.forEach((c) => {
+    r1 += `<th colspan="6" style="${_thS};${_thCardBg}">${c}</th>`
+    dayLabels.forEach((d) => {
+      r2 += `<th colspan="2" style="${_thS};${_thCardBg}">${d}</th>`
+      r3 += `<th style="${_thS};${_thCardBg}">Ημ.</th><th style="${_thS};${_thCardBg}">Νυχ.</th>`
+    })
+  })
+  return `<thead><tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr></thead>`
+}
+
+function _allCardEmployees() {
+  const byVat = new Map()
+  data.employees.forEach((e) => byVat.set(String(e.vat), e))
+  cardVirtualEmployees.forEach((e) => {
+    if (!byVat.has(String(e.vat))) byVat.set(String(e.vat), e)
+  })
+  return [...byVat.values()]
+}
+
+function _renderMonthCardSummary(monthVal) {
+  const [year, month] = monthVal.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+
+  const weekStarts = []
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
+  }
+
+  const allEmps = _allCardEmployees()
+  if (!allEmps.length) return '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
+
+  const grandTotals = _emptyBuckets()
+  let totalContract = 0
+  let rows = ''
+  allEmps.forEach((emp) => {
+    const empBuckets = _emptyBuckets()
+    let empContract = 0
+    weekStarts.forEach((ws) => {
+      const { buckets, contract } = _monthWeekCardBuckets(emp.vat, ws, firstDay, lastDay)
+      _aggregateBuckets(empBuckets, buckets)
+      empContract += contract
+    })
+    empContract = Math.round(empContract * 100) / 100
+    rows += _summaryRow(employeeLabel(emp), empBuckets, false, empContract)
+    _aggregateBuckets(grandTotals, empBuckets)
+    totalContract += empContract
+  })
+  return `<table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
+    ${_cardSummaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table>`
+}
+
+function _renderWeekCardSummary(monthVal) {
+  const [year, month] = monthVal.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+
+  const weekStarts = []
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
+  }
+
+  const allEmps = _allCardEmployees()
+  if (!allEmps.length) return '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
+
+  let html = ''
+  weekStarts.forEach((ws) => {
+    const wEnd = new Date(ws); wEnd.setDate(wEnd.getDate() + 6)
+    const rangeStart = ws < firstDay ? firstDay : ws
+    const rangeEnd = wEnd > lastDay ? lastDay : wEnd
+    const label = `${formatDate(rangeStart).slice(5)} — ${formatDate(rangeEnd).slice(5)}`
+    const grandTotals = _emptyBuckets()
+    let totalContract = 0
+    let rows = ''
+    allEmps.forEach((emp) => {
+      const { buckets, contract } = _monthWeekCardBuckets(emp.vat, ws, firstDay, lastDay)
+      rows += _summaryRow(employeeLabel(emp), buckets, false, contract)
+      _aggregateBuckets(grandTotals, buckets)
+      totalContract += contract
+    })
+    html += `<div style="margin-bottom:18px">
+      <div style="font-weight:600;font-size:13px;color:#92400e;margin-bottom:4px">Κάρτα Εβδ. ${label}</div>
+      <table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
+        ${_cardSummaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table></div>`
+  })
+  return html || '<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν δεδομένα κάρτας.</p>'
 }
 
 // ─── Patch resetAllData to also reset viewStart ───────────────────────────

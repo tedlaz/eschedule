@@ -558,6 +558,17 @@
       <label style="display:flex;align-items:center;gap:8px;font-size:14px">
         Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
       </label>
+      <div id="cardEdit2ndRow" style="display:none;border-top:1px solid #e5e7eb;padding-top:10px;margin-top:2px">
+        <div style="font-size:12px;color:#92400e;margin-bottom:6px;font-weight:600">2η Βάρδια</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+            Είσοδος&nbsp;<input type="time" id="cardEditIn2" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+            Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut2" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+          </label>
+        </div>
+      </div>
     </div>
     <div class="modal-buttons">
       <button class="btn-primary" onclick="saveCardTimeEdit()">Αποθήκευση</button>
@@ -592,6 +603,10 @@
       <div style="display:flex;gap:4px">
         <button class="btn-secondary btn-sm" id="summaryViewWeek" onclick="renderSummary('week')" style="font-weight:700">Εβδομάδα</button>
         <button class="btn-secondary btn-sm" id="summaryViewMonth" onclick="renderSummary('month')">Μήνας</button>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-secondary btn-sm" id="summaryViewCardWeek" onclick="renderSummary('cardWeek')" style="color:#92400e">Κάρτα Εβδ.</button>
+        <button class="btn-secondary btn-sm" id="summaryViewCardMonth" onclick="renderSummary('cardMonth')" style="color:#92400e">Κάρτα Μήν.</button>
       </div>
       <button class="btn-primary" onclick="renderSummary()">Εμφάνιση</button>
     </div>
