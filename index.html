@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="el">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,22 +9,24 @@
   <style>
     /* ─── Toolbar ──────────────────────────────────────────────────── */
     .toolbar {
-      background: rgba(255,255,255,0.95);
+      background: rgba(255, 255, 255, 0.95);
       border-radius: 12px;
       padding: 10px 14px;
       margin-bottom: 16px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
     }
+
     .toolbar-nav {
       display: flex;
       align-items: center;
       gap: 4px;
       margin: 0 auto;
     }
+
     #viewRangeDisplay {
       min-width: 190px;
       text-align: center;
@@ -31,24 +34,33 @@
       font-size: 0.95em;
       color: #374151;
     }
-    .toolbar-right { margin-left: auto; display: flex; gap: 6px; }
+
+    .toolbar-right {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+    }
 
     /* ─── Grid wrapper ─────────────────────────────────────────────── */
     .grid-wrapper {
       background: white;
       border-radius: 12px;
       overflow: auto;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     }
+
     #scheduleTable {
       width: 100%;
       border-collapse: collapse;
       min-width: 760px;
     }
-    #scheduleTable th, #scheduleTable td {
+
+    #scheduleTable th,
+    #scheduleTable td {
       border: 1px solid #e5e7eb;
       padding: 0;
     }
+
     #scheduleTable th {
       background: linear-gradient(135deg, #667eea, #764ba2);
       color: #fff;
@@ -57,36 +69,124 @@
       font-size: 12px;
       white-space: nowrap;
     }
-    #scheduleTable th.sunday-header  { background: linear-gradient(135deg, #ff9800, #e65c00); }
-    #scheduleTable th.holiday-header { background: linear-gradient(135deg, #c084fc, #a855f7); }
 
-    .day-abbrev  { font-weight: 700; font-size: 13px; }
-    .day-date    { font-size: 11px; opacity: .85; }
-    .holiday-name-hdr { font-size: 9px; opacity: .9; }
+    #scheduleTable th.sunday-header {
+      background: linear-gradient(135deg, #ff9800, #e65c00);
+    }
+
+    #scheduleTable th.holiday-header {
+      background: linear-gradient(135deg, #c084fc, #a855f7);
+    }
+
+    .day-abbrev {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .day-date {
+      font-size: 11px;
+      opacity: .85;
+    }
+
+    .holiday-name-hdr {
+      font-size: 9px;
+      opacity: .9;
+    }
+
     .premium-badge {
-      display: inline-block; margin-top: 2px;
-      background: rgba(255,255,255,0.25);
-      padding: 1px 5px; border-radius: 999px; font-size: 9px; font-weight: 700;
+      display: inline-block;
+      margin-top: 2px;
+      background: rgba(255, 255, 255, 0.25);
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 700;
     }
 
     /* ─── Employee column ──────────────────────────────────────────── */
-    .emp-col { min-width: 140px; width: 155px; }
+    .emp-col {
+      min-width: 140px;
+      width: 155px;
+    }
+
     .emp-name-cell {
       padding: 6px 8px;
       vertical-align: middle;
       background: #f8fafc;
     }
-    .emp-name-row { display: flex; align-items: center; gap: 4px; }
-    .emp-name { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pay-badge { font-size: 10px; padding: 1px 5px; border-radius: 999px; font-weight: 700; flex-shrink: 0; }
-    .del-emp { cursor: pointer; color: #ef4444; font-size: 15px; font-weight: 700; flex-shrink: 0; line-height: 1; }
-    .del-emp:hover { color: #b91c1c; }
-    .week-stats { font-size: 11px; color: #6b7280; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
-    .week-cost { margin-left: auto; font-weight: 600; color: #374151; }
-    .hours-bar-wrap { height: 4px; background: #e5e7eb; border-radius: 2px; margin-top: 3px; }
-    .hours-bar-fill { height: 100%; border-radius: 2px; background: #667eea; }
-    .hours-bar-fill.danger  { background: #ef4444; }
-    .hours-bar-fill.warning { background: #f59e0b; }
+
+    .emp-name-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .emp-name {
+      font-weight: 600;
+      font-size: 13px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pay-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .del-emp {
+      cursor: pointer;
+      color: #ef4444;
+      font-size: 15px;
+      font-weight: 700;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .del-emp:hover {
+      color: #b91c1c;
+    }
+
+    .week-stats {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .week-cost {
+      margin-left: auto;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .hours-bar-wrap {
+      height: 4px;
+      background: #e5e7eb;
+      border-radius: 2px;
+      margin-top: 3px;
+    }
+
+    .hours-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: #667eea;
+    }
+
+    .hours-bar-fill.danger {
+      background: #ef4444;
+    }
+
+    .hours-bar-fill.warning {
+      background: #f59e0b;
+    }
 
     /* ─── Day cells ────────────────────────────────────────────────── */
     .day-cell {
@@ -96,11 +196,28 @@
       min-width: 80px;
       transition: background .15s;
     }
-    .day-cell:hover { background: #f0f4ff; }
-    .day-cell.holiday-day { background: #fff7ed; }
-    .day-cell.holiday-day:hover { background: #fef3c7; }
-    .day-cell.cell-selected { background: #ede9fe !important; outline: 2px solid #667eea; outline-offset: -2px; }
-    .day-cell.cell-selected:hover { background: #ddd6fe !important; }
+
+    .day-cell:hover {
+      background: #f0f4ff;
+    }
+
+    .day-cell.holiday-day {
+      background: #fff7ed;
+    }
+
+    .day-cell.holiday-day:hover {
+      background: #fef3c7;
+    }
+
+    .day-cell.cell-selected {
+      background: #ede9fe !important;
+      outline: 2px solid #667eea;
+      outline-offset: -2px;
+    }
+
+    .day-cell.cell-selected:hover {
+      background: #ddd6fe !important;
+    }
 
     /* ─── Selection action bar ────────────────────────────────────── */
     #selectionActions {
@@ -114,17 +231,32 @@
       margin-bottom: 10px;
       font-size: 13px;
     }
-    .selection-count { font-weight: 600; color: #5b21b6; flex: 1; }
+
+    .selection-count {
+      font-weight: 600;
+      color: #5b21b6;
+      flex: 1;
+    }
+
     /* High-specificity rule so the row separator beats the table's border:1px rule */
     #scheduleTable td.day-cell,
-    #scheduleTable td.emp-name-cell { border-top: 4px solid #64748b; }
-    .empty-grid { text-align: center; padding: 40px 20px; color: #9ca3af; font-size: 14px; }
+    #scheduleTable td.emp-name-cell {
+      border-top: 4px solid #64748b;
+    }
+
+    .empty-grid {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+      font-size: 14px;
+    }
 
     /* ─── Bars ─────────────────────────────────────────────────────── */
     .bar-wrap {
       position: relative;
       margin-bottom: 2px;
     }
+
     .bar {
       position: relative;
       height: 20px;
@@ -133,15 +265,51 @@
       display: flex;
       align-items: center;
     }
-    .bar-empty   { background: transparent; justify-content: center; }
-    .bar-rest    { background: transparent; justify-content: center; }
-    .bar-me      { background: linear-gradient(135deg, #bfdbfe, #93c5fd); justify-content: center; }
-    .bar-paid    { background: linear-gradient(135deg, #bbf7d0, #4ade80); justify-content: center; }
-    .bar-unpaid  { background: linear-gradient(135deg, #fed7aa, #fb923c); justify-content: center; }
-    .bar-work    { background: transparent; }
-    .bar-card    { background: transparent; }
-    .bar-lbl     { font-size: 9px; font-weight: 700; color: #374151; }
-    .bar-gap-lbl { font-size: 11px; font-weight: 600; color: #dc2626; }
+
+    .bar-empty {
+      background: transparent;
+      justify-content: center;
+    }
+
+    .bar-rest {
+      background: transparent;
+      justify-content: center;
+    }
+
+    .bar-me {
+      background: linear-gradient(135deg, #bfdbfe, #93c5fd);
+      justify-content: center;
+    }
+
+    .bar-paid {
+      background: linear-gradient(135deg, #bbf7d0, #4ade80);
+      justify-content: center;
+    }
+
+    .bar-unpaid {
+      background: linear-gradient(135deg, #fed7aa, #fb923c);
+      justify-content: center;
+    }
+
+    .bar-work {
+      background: transparent;
+    }
+
+    .bar-card {
+      background: transparent;
+    }
+
+    .bar-lbl {
+      font-size: 9px;
+      font-weight: 700;
+      color: #374151;
+    }
+
+    .bar-gap-lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: #dc2626;
+    }
 
     /* ─── Segments ─────────────────────────────────────────────────── */
     .seg {
@@ -152,69 +320,207 @@
       justify-content: center;
       overflow: hidden;
     }
-    .seg-work    { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .seg-tel     { background: linear-gradient(135deg, #60a5fa, #3b82f6); }
-    .seg-holiday { background: linear-gradient(135deg, #fb923c, #ea580c); }
-    .seg-gap     { background: transparent; }
-    .seg-card    { background: repeating-linear-gradient(45deg,#fbbf24,#fbbf24 6px,#d97706 6px,#d97706 12px); opacity: .85; }
-    .seg-card-flash { animation: card-flash 1s ease-in-out infinite; }
-    @keyframes card-flash { 0%,100%{opacity:.85} 50%{opacity:.2} }
-    .seg-lbl  { font-size: 9px; font-weight: 700; color: #fff; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
-    .gap-lbl  { font-size: 8px; font-weight: 600; color: #6b7280; white-space: nowrap; }
+
+    .seg-work {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .seg-tel {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    }
+
+    .seg-holiday {
+      background: linear-gradient(135deg, #fb923c, #ea580c);
+    }
+
+    .seg-gap {
+      background: transparent;
+    }
+
+    .seg-card {
+      background: repeating-linear-gradient(45deg, #fbbf24, #fbbf24 6px, #d97706 6px, #d97706 12px);
+      opacity: .85;
+    }
+
+    .seg-card-flash {
+      animation: card-flash 1s ease-in-out infinite;
+    }
+
+    @keyframes card-flash {
+
+      0%,
+      100% {
+        opacity: .85
+      }
+
+      50% {
+        opacity: .2
+      }
+    }
+
+    .seg-lbl {
+      font-size: 9px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+
+    .gap-lbl {
+      font-size: 8px;
+      font-weight: 600;
+      color: #6b7280;
+      white-space: nowrap;
+    }
 
     /* Card bar */
-    .card-bar-wrap .bar { height: 16px; border-radius: 3px; opacity: .85; }
-    .seg-card-illegal { background: repeating-linear-gradient(45deg,#f87171,#f87171 6px,#dc2626 6px,#dc2626 12px); opacity: .9; }
+    .card-bar-wrap .bar {
+      height: 16px;
+      border-radius: 3px;
+      opacity: .85;
+    }
+
+    .seg-card-illegal {
+      background: repeating-linear-gradient(45deg, #f87171, #f87171 6px, #dc2626 6px, #dc2626 12px);
+      opacity: .9;
+    }
 
     /* Card violation badges (positioned relative to .bar-wrap) */
     .card-illegal-badge {
-      position: absolute; top: -7px; right: 2px;
-      background: #ef4444; color: #fff;
-      font-size: 9px; font-weight: 700; line-height: 1;
-      width: 13px; height: 13px; border-radius: 50%;
-      display: inline-flex; align-items: center; justify-content: center;
-      z-index: 3; cursor: default;
+      position: absolute;
+      top: -7px;
+      right: 2px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      cursor: default;
     }
+
     .card-missing-badge {
-      position: absolute; top: -7px; left: 2px;
-      background: #f59e0b; color: #fff;
-      font-size: 8px; font-weight: 700; line-height: 1;
-      padding: 1px 3px; border-radius: 3px;
-      z-index: 3; cursor: default; white-space: nowrap;
+      position: absolute;
+      top: -7px;
+      left: 2px;
+      background: #f59e0b;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 1px 3px;
+      border-radius: 3px;
+      z-index: 3;
+      cursor: default;
+      white-space: nowrap;
     }
-    .card-missing-badge.exceeded { background: #ef4444; }
+
+    .card-missing-badge.exceeded {
+      background: #ef4444;
+    }
 
     /* Missing-card correction bar (shown in card row position) */
-    .corr-bar-wrap { cursor: pointer; }
-    .corr-bar-wrap .bar { height: 16px; border-radius: 3px; }
-    .bar-corr-resolved { background: #dcfce7; display: flex; align-items: center; justify-content: center; }
-    .bar-corr-pending { background: repeating-linear-gradient(45deg,#fca5a5,#fca5a5 5px,#fecaca 5px,#fecaca 10px);
-                        display: flex; align-items: center; justify-content: center;
-                        animation: corr-pulse 1.5s ease-in-out infinite; }
-    @keyframes corr-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-    .corr-label { font-size: 10px; font-weight: 600; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
-    .corr-selected .bar { outline: 2px solid #3b82f6; outline-offset: -1px; }
+    .corr-bar-wrap {
+      cursor: pointer;
+    }
+
+    .corr-bar-wrap .bar {
+      height: 16px;
+      border-radius: 3px;
+    }
+
+    .bar-corr-resolved {
+      background: #dcfce7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bar-corr-pending {
+      background: repeating-linear-gradient(45deg, #fca5a5, #fca5a5 5px, #fecaca 5px, #fecaca 10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: corr-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes corr-pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .5
+      }
+    }
+
+    .corr-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #374151;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 4px;
+    }
+
+    .corr-selected .bar {
+      outline: 2px solid #3b82f6;
+      outline-offset: -1px;
+    }
 
     /* ─── Overnight seamless bar across cells ────────────────────────── */
-    .seg-spillover { cursor: pointer; }
+    .seg-spillover {
+      cursor: pointer;
+    }
+
     /* Remove padding + border on connecting edges so bars touch */
-    td.overnight-out { padding-right: 0; border-right-color: transparent; }
-    td.overnight-in  { padding-left: 0;  border-left-color: transparent; }
+    td.overnight-out {
+      padding-right: 0;
+      border-right-color: transparent;
+    }
+
+    td.overnight-in {
+      padding-left: 0;
+      border-left-color: transparent;
+    }
+
     /* Flat edges on connecting sides */
-    .bar-extends-right > .bar { border-radius: 3px 0 0 3px; }
-    .bar-extends-left  > .bar { border-radius: 0 3px 3px 0; }
-    .bar-extends-left.bar-extends-right > .bar { border-radius: 0; }
+    .bar-extends-right>.bar {
+      border-radius: 3px 0 0 3px;
+    }
+
+    .bar-extends-left>.bar {
+      border-radius: 0 3px 3px 0;
+    }
+
+    .bar-extends-left.bar-extends-right>.bar {
+      border-radius: 0;
+    }
 
     /* ─── Modals ────────────────────────────────────────────────────── */
     .modal {
       display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.5);
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
       z-index: 1000;
       align-items: center;
       justify-content: center;
     }
-    .modal.active { display: flex; }
+
+    .modal.active {
+      display: flex;
+    }
+
     .modal-content {
       background: white;
       border-radius: 12px;
@@ -223,535 +529,687 @@
       max-width: 540px;
       max-height: 90vh;
       overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     }
-    .modal-content h2 { margin-bottom: 16px; color: #1f2937; font-size: 1.1em; }
-    .modal-buttons { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
+    .modal-content h2 {
+      margin-bottom: 16px;
+      color: #1f2937;
+      font-size: 1.1em;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      justify-content: flex-end;
+    }
 
     /* ─── Forms ─────────────────────────────────────────────────────── */
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
-    .form-group input, .form-group select, .form-group textarea {
-      width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px;
-      font-size: 13px; outline: none;
+    .form-group {
+      margin-bottom: 12px;
     }
-    .form-group input:focus, .form-group select:focus { border-color: #667eea; }
-    .form-row { display: flex; gap: 10px; }
-    .form-row .form-group { flex: 1; }
-    .pay-section { flex-direction: column; }
-    .hint { font-size: 11px; color: #6b7280; margin-top: 3px; }
-    .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; }
-    .checkbox-item { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: #667eea;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .pay-section {
+      flex-direction: column;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+    }
 
     /* ─── Buttons ────────────────────────────────────────────────────── */
-    button { padding: 8px 14px; border: none; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all .2s; }
-    .btn-primary { background: #667eea; color: white; }
-    .btn-primary:hover { background: #5a6fd6; }
-    .btn-secondary { background: #e5e7eb; color: #374151; }
-    .btn-secondary:hover { background: #d1d5db; }
-    .btn-danger { background: #fee2e2; color: #b91c1c; }
-    .btn-danger:hover { background: #fecaca; }
-    .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 5px; }
-    .btn-active { background: #667eea; color: white; }
+    button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all .2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5a6fd6;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .btn-danger:hover {
+      background: #fecaca;
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 5px;
+    }
+
+    .btn-active {
+      background: #667eea;
+      color: white;
+    }
 
     /* ─── Employee list (inside employeeListModal) ─────────────────── */
     .emp-list-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid #f3f4f6; gap: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+      gap: 8px;
     }
-    .emp-list-item:last-child { border-bottom: none; }
+
+    .emp-list-item:last-child {
+      border-bottom: none;
+    }
 
     /* ─── Card modal tabs ──────────────────────────────────────────── */
-    .card-tabs, .sched-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
-    .card-tab-btn, .sched-tab-btn {
-      padding: 7px 16px; border: none; background: none; cursor: pointer;
-      font-size: 13px; font-weight: 600; color: #6b7280; border-radius: 6px 6px 0 0;
-      border-bottom: 2px solid transparent; margin-bottom: -2px;
+    .card-tabs,
+    .sched-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #e5e7eb;
     }
-    .card-tab-btn.active, .sched-tab-btn.active { color: #667eea; border-bottom-color: #667eea; background: #f5f3ff; }
-    .card-tab-panel, .sched-tab-panel { display: none; }
-    .card-tab-panel.active, .sched-tab-panel.active { display: block; }
-    #cardImportStatus { font-size: 12px; color: #6b7280; margin-top: 8px; min-height: 18px; }
+
+    .card-tab-btn,
+    .sched-tab-btn {
+      padding: 7px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      border-radius: 6px 6px 0 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .card-tab-btn.active,
+    .sched-tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      background: #f5f3ff;
+    }
+
+    .card-tab-panel,
+    .sched-tab-panel {
+      display: none;
+    }
+
+    .card-tab-panel.active,
+    .sched-tab-panel.active {
+      display: block;
+    }
+
+    #cardImportStatus {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+      min-height: 18px;
+    }
   </style>
   <script src="xlsx.full.min.js"></script>
 </head>
+
 <body>
-<div class="container">
-  <div class="page-header">
-    <h1>eSchedule</h1>
-    <span id="companyName" class="company-name company-name-placeholder" onclick="editCompanyName()">Όνομα εταιρείας…</span>
-  </div>
-
-  <!-- ─── Toolbar ─────────────────────────────────────────────── -->
-  <div class="toolbar">
-    <!-- Left actions -->
-    <button class="btn-secondary" onclick="openScheduleModal()">📅 Πρόγραμμα</button>
-    <button class="btn-secondary" onclick="openCardImportModal()">📁 Κάρτα</button>
-    <button class="btn-secondary" onclick="openSummaryModal()">Σύνοψη</button>
-
-    <!-- Navigation (centred) -->
-    <div class="toolbar-nav">
-      <button class="btn-secondary" onclick="changeView(-7)" title="Εβδομάδα πίσω">◀◀</button>
-      <button class="btn-secondary" onclick="changeView(-1)" title="Μία μέρα πίσω">◀</button>
-      <span id="viewRangeDisplay"></span>
-      <button class="btn-secondary" onclick="changeView(1)" title="Μία μέρα μπροστά">▶</button>
-      <button class="btn-secondary" onclick="changeView(7)" title="Εβδομάδα μπροστά">▶▶</button>
+  <div class="container">
+    <div class="page-header">
+      <h1>eSchedule</h1>
+      <span id="companyName" class="company-name company-name-placeholder" onclick="editCompanyName()">Όνομα
+        εταιρείας…</span>
     </div>
 
-    <!-- Right actions -->
-    <div class="toolbar-right">
-      <button class="btn-secondary" onclick="copyPreviousWeekToCurrentWeek()">⎘ Προηγ.→Τρέχ.</button>
-      <button class="btn-danger btn-sm" onclick="resetAllData()" title="Επαναφορά όλων των δεδομένων">🗑</button>
+    <!-- ─── Toolbar ─────────────────────────────────────────────── -->
+    <div class="toolbar">
+      <!-- Left actions -->
+      <button class="btn-secondary" onclick="openScheduleModal()">📅 Πρόγραμμα</button>
+      <button class="btn-secondary" onclick="openCardImportModal()">📁 Κάρτα</button>
+      <button class="btn-secondary" onclick="openSummaryModal()">Σύνοψη</button>
+
+      <!-- Navigation (centred) -->
+      <div class="toolbar-nav">
+        <button class="btn-secondary" onclick="changeView(-7)" title="Εβδομάδα πίσω">◀◀</button>
+        <button class="btn-secondary" onclick="changeView(-1)" title="Μία μέρα πίσω">◀</button>
+        <span id="viewRangeDisplay"></span>
+        <button class="btn-secondary" onclick="changeView(1)" title="Μία μέρα μπροστά">▶</button>
+        <button class="btn-secondary" onclick="changeView(7)" title="Εβδομάδα μπροστά">▶▶</button>
+      </div>
+
+      <!-- Right actions -->
+      <div class="toolbar-right">
+        <button class="btn-secondary" onclick="copyPreviousWeekToCurrentWeek()">⎘ Προηγ.→Τρέχ.</button>
+        <button class="btn-danger btn-sm" onclick="resetAllData()" title="Επαναφορά όλων των δεδομένων">🗑</button>
+      </div>
+    </div>
+
+    <!-- ─── Selection action bar ─────────────────────────────────── -->
+    <div id="selectionActions"></div>
+
+    <!-- ─── Central Grid ──────────────────────────────────────────── -->
+    <div class="grid-wrapper">
+      <table id="scheduleTable"></table>
     </div>
   </div>
 
-  <!-- ─── Selection action bar ─────────────────────────────────── -->
-  <div id="selectionActions"></div>
-
-  <!-- ─── Central Grid ──────────────────────────────────────────── -->
-  <div class="grid-wrapper">
-    <table id="scheduleTable"></table>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════════════════════════════
+  <!-- ════════════════════════════════════════════════════════════════
      MODALS
      ════════════════════════════════════════════════════════════════ -->
 
-<!-- 2a. Employee List Modal -->
-<div class="modal" id="employeeListModal">
-  <div class="modal-content">
-    <h2>👥 Εργαζόμενοι</h2>
-    <div id="empListBody"></div>
-    <div class="modal-buttons">
-      <button class="btn-secondary" onclick="closeModal('employeeListModal')">Κλείσιμο</button>
-      <button class="btn-primary" onclick="closeModal('employeeListModal'); openEmployeeModal()">+ Προσθήκη</button>
+  <!-- 2a. Employee List Modal -->
+  <div class="modal" id="employeeListModal">
+    <div class="modal-content">
+      <h2>👥 Εργαζόμενοι</h2>
+      <div id="empListBody"></div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('employeeListModal')">Κλείσιμο</button>
+        <button class="btn-primary" onclick="closeModal('employeeListModal'); openEmployeeModal()">+ Προσθήκη</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- 2b. Add / Edit Employee Modal -->
-<div class="modal" id="employeeModal">
-  <div class="modal-content">
-    <h2 id="employeeModalTitle">Προσθήκη Εργαζομένου</h2>
-    <input type="hidden" id="editEmployeeId">
+  <!-- 2b. Add / Edit Employee Modal -->
+  <div class="modal" id="employeeModal">
+    <div class="modal-content">
+      <h2 id="employeeModalTitle">Προσθήκη Εργαζομένου</h2>
+      <input type="hidden" id="editEmployeeId">
 
-    <div class="form-row">
-      <div class="form-group">
-        <label>ΑΦΜ (9 ψηφία)</label>
-        <input type="text" id="employeeVat" maxlength="9" placeholder="π.χ. 123456789">
-      </div>
-      <div class="form-group">
-        <label>Ψευδώνυμο / Όνομα</label>
-        <input type="text" id="employeeNick" placeholder="π.χ. Μάριος">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label>Ώρες / Εβδ.</label>
-        <input type="number" id="employeeWeekHours" min="1" max="80" value="40">
-      </div>
-      <div class="form-group">
-        <label>Μέρες / Εβδ.</label>
-        <input type="number" id="employeeWeekDays" min="1" max="7" value="5">
-      </div>
-    </div>
-
-    <div class="modal-buttons">
-      <button class="btn-secondary" onclick="closeModal('employeeModal')">Ακύρωση</button>
-      <button class="btn-primary" onclick="saveEmployee()">💾 Αποθήκευση</button>
-    </div>
-  </div>
-</div>
-
-<!-- 3. Shift Modal -->
-<div class="modal" id="shiftModal">
-  <div class="modal-content">
-    <h2>✏ Επεξεργασία Βάρδιας</h2>
-    <input type="hidden" id="shiftEmployeeId">
-    <input type="hidden" id="shiftDate">
-    <div class="form-group">
-      <label>Τύπος</label>
-      <select id="shiftType" onchange="toggleShiftFields()">
-        <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
-        <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
-        <option value="AN">Ανάπαυση (AN)</option>
-      </select>
-    </div>
-    <div id="workingShiftFields">
       <div class="form-row">
         <div class="form-group">
-          <label>Έναρξη</label>
-          <input type="text" id="shiftStart" value="09:00" placeholder="HH:MM" class="time-input-24h">
+          <label>ΑΦΜ (9 ψηφία)</label>
+          <input type="text" id="employeeVat" maxlength="9" placeholder="π.χ. 123456789">
         </div>
         <div class="form-group">
-          <label>Λήξη</label>
-          <input type="text" id="shiftEnd" value="17:00" placeholder="HH:MM" class="time-input-24h">
+          <label>Ψευδώνυμο / Όνομα</label>
+          <input type="text" id="employeeNick" placeholder="π.χ. Μάριος">
         </div>
       </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ώρες / Εβδ.</label>
+          <input type="number" id="employeeWeekHours" min="1" max="80" value="40">
+        </div>
+        <div class="form-group">
+          <label>Μέρες / Εβδ.</label>
+          <input type="number" id="employeeWeekDays" min="1" max="7" value="5">
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('employeeModal')">Ακύρωση</button>
+        <button class="btn-primary" onclick="saveEmployee()">💾 Αποθήκευση</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Shift Modal -->
+  <div class="modal" id="shiftModal">
+    <div class="modal-content">
+      <h2>✏ Επεξεργασία Βάρδιας</h2>
+      <input type="hidden" id="shiftEmployeeId">
+      <input type="hidden" id="shiftDate">
       <div class="form-group">
-        <label>
-          <input type="checkbox" id="hasSecondShift" onchange="toggleSecondShiftFields()">
-          Δεύτερη βάρδια ίδια μέρα
-        </label>
+        <label>Τύπος</label>
+        <select id="shiftType" onchange="toggleShiftFields()">
+          <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
+          <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
+          <option value="AN">Ανάπαυση (AN)</option>
+        </select>
       </div>
-      <div class="form-row" id="secondShiftFields" style="display:none">
+      <div id="workingShiftFields">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Έναρξη</label>
+            <input type="text" id="shiftStart" value="09:00" placeholder="HH:MM" class="time-input-24h">
+          </div>
+          <div class="form-group">
+            <label>Λήξη</label>
+            <input type="text" id="shiftEnd" value="17:00" placeholder="HH:MM" class="time-input-24h">
+          </div>
+        </div>
         <div class="form-group">
-          <label>Τύπος 2ης βάρδιας</label>
-          <select id="shiftType2">
-            <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
-            <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
+          <label>
+            <input type="checkbox" id="hasSecondShift" onchange="toggleSecondShiftFields()">
+            Δεύτερη βάρδια ίδια μέρα
+          </label>
+        </div>
+        <div class="form-row" id="secondShiftFields" style="display:none">
+          <div class="form-group">
+            <label>Τύπος 2ης βάρδιας</label>
+            <select id="shiftType2">
+              <option value="ΕΡΓ">Εργασία (ΕΡΓ)</option>
+              <option value="ΤΗΛ">Τηλεεργασία (ΤΗΛ)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Έναρξη 2</label>
+            <input type="text" id="shiftStart2" value="" placeholder="HH:MM" class="time-input-24h">
+          </div>
+          <div class="form-group">
+            <label>Λήξη 2</label>
+            <input type="text" id="shiftEnd2" value="" placeholder="HH:MM" class="time-input-24h">
+          </div>
+        </div>
+      </div>
+      <div class="form-group" id="absenceReasonGroup" style="display:none">
+        <label>Αιτιολογία (προαιρετικά)</label>
+        <input type="text" id="absenceReason" placeholder="π.χ. Άδεια">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-danger" onclick="clearShift()">🗑 Διαγραφή</button>
+        <button class="btn-secondary" onclick="closeModal('shiftModal')">Ακύρωση</button>
+        <button class="btn-primary" onclick="saveShift()">💾 Αποθήκευση</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Card Modal (tabbed: Load / Save / Check / Clear) -->
+  <div class="modal" id="cardImportModal">
+    <div class="modal-content" style="max-width:620px">
+      <h2>📁 Κάρτα</h2>
+
+      <div class="card-tabs">
+        <button class="card-tab-btn active" id="cardTab-load" onclick="_cardTabSwitch('load')">📂 Φόρτωση</button>
+        <button class="card-tab-btn" id="cardTab-save" onclick="_cardTabSwitch('save')">💾 Αποθήκευση</button>
+        <button class="card-tab-btn" id="cardTab-check" onclick="_cardTabSwitch('check')">🔍 Έλεγχος</button>
+        <button class="card-tab-btn" id="cardTab-clear" onclick="_cardTabSwitch('clear')">🗑 Εκκαθάριση</button>
+      </div>
+
+      <!-- Load tab -->
+      <div class="card-tab-panel active" id="cardPanel-load">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+          Αρχείο CSV, TXT ή XLSX με στήλες: <code>employee, date, in, out</code><br>
+          ή μορφή: <code>ΑΦΜ YYYY-MM-DD HH:MM-HH:MM</code>
+        </p>
+        <div class="form-group">
+          <label>Αρχείο Κάρτας</label>
+          <input type="file" id="cardFileInput" accept=".csv,.txt,.xlsx,.xls" onchange="handleCardFileSelect(this)">
+        </div>
+        <div class="form-group" style="margin-top:8px">
+          <label style="font-size:12px;color:#6b7280">Ανοχή σύγκρισης (λεπτά)</label>
+          <input type="number" id="corrToleranceInput" value="15" min="0" max="120"
+            style="width:70px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+        </div>
+        <div id="cardImportStatus"></div>
+        <div style="border-top:1px solid #e5e7eb;margin-top:14px;padding-top:12px">
+          <p style="font-size:12px;color:#6b7280;margin-bottom:8px;font-weight:600">Αποθηκευμένοι μήνες</p>
+          <div id="cardSavedMonthsList">
+            <span style="color:#9ca3af;font-size:12px">Δεν υπάρχουν αποθηκευμένοι μήνες.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save tab -->
+      <div class="card-tab-panel" id="cardPanel-save">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+          Αποθήκευση δεδομένων κάρτας και διορθώσεων για τον τρέχοντα μήνα.
+        </p>
+        <div id="cardSaveStatus" style="font-size:12px;color:#6b7280;margin-bottom:12px;min-height:18px"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="saveMonthlyCard()">💾 Αποθήκευση μήνα</button>
+          <button class="btn-secondary" onclick="exportCardData()">📥 Λήψη XLSX</button>
+        </div>
+      </div>
+
+      <!-- Check tab -->
+      <div class="card-tab-panel" id="cardPanel-check">
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
+            <input type="month" id="cardCheckMonth"
+              style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <button class="btn-primary" onclick="runCardCheck()">▶ Εκτέλεση</button>
+        </div>
+        <div id="cardCheckResults" style="max-height:340px;overflow-y:auto">
+          <p style="color:#9ca3af;font-size:13px">Φορτώστε αρχείο κάρτας, επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>
+        </div>
+      </div>
+
+      <!-- Clear tab -->
+      <div class="card-tab-panel" id="cardPanel-clear">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+          Διαγραφή όλων των δεδομένων κάρτας από τη μνήμη.<br>
+          Τα δεδομένα δεν διαγράφονται από το αρχείο σας.
+        </p>
+        <div id="cardClearStatus" style="font-size:12px;color:#6b7280;margin-bottom:12px;min-height:18px"></div>
+        <button class="btn-danger" onclick="clearCardData()">🗑 Εκκαθάριση δεδομένων κάρτας</button>
+      </div>
+
+      <div class="modal-buttons" style="margin-top:20px">
+        <button class="btn-secondary" onclick="closeModal('cardImportModal')">Κλείσιμο</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5a. Schedule modal (tabbed: Load / Save / Check / Print) -->
+  <div class="modal" id="scheduleModal">
+    <div class="modal-content" style="max-width:620px">
+      <h2>📅 Πρόγραμμα</h2>
+
+      <div class="sched-tabs">
+        <button class="sched-tab-btn active" id="schedTab-load" onclick="_schedTabSwitch('load')">📂 Φόρτωση</button>
+        <button class="sched-tab-btn" id="schedTab-save" onclick="_schedTabSwitch('save')">💾 Αποθήκευση</button>
+        <button class="sched-tab-btn" id="schedTab-check" onclick="_schedTabSwitch('check')">🔍 Έλεγχος</button>
+        <button class="sched-tab-btn" id="schedTab-print" onclick="_schedTabSwitch('print')">🖨 Εκτύπωση</button>
+        <button class="sched-tab-btn" id="schedTab-changes" onclick="_schedTabSwitch('changes')">📝 Αλλαγές</button>
+      </div>
+
+      <!-- Load tab -->
+      <div class="sched-tab-panel active" id="schedPanel-load">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+          Υποστηριζόμενες μορφές: <strong>JSON</strong> (εξαγωγή eSchedule) ή <strong>XLSX</strong> (μορφή Εργάνη).<br>
+          Η εισαγωγή συγχωνεύει τα δεδομένα με τα υπάρχοντα.
+        </p>
+        <div id="schedLoadStatus" style="font-size:12px;color:#6b7280;margin-bottom:10px;min-height:18px"></div>
+        <button class="btn-primary" onclick="importSchedule()">📂 Επιλογή αρχείου…</button>
+      </div>
+
+      <!-- Save tab -->
+      <div class="sched-tab-panel" id="schedPanel-save">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+          Αποθήκευση ολόκληρου του προγράμματος (εργαζόμενοι, βάρδιες, ρυθμίσεις) σε αρχείο JSON.<br>
+          Το αρχείο μπορεί να επαναφορτωθεί από την καρτέλα <em>Φόρτωση</em>.
+        </p>
+        <button class="btn-primary" onclick="exportScheduleAsJson()">💾 Λήψη JSON</button>
+      </div>
+
+      <!-- Check tab -->
+      <div class="sched-tab-panel" id="schedPanel-check">
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
+            <input type="month" id="schedCheckMonth"
+              style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <button class="btn-primary" onclick="runScheduleCheck()">▶ Εκτέλεση</button>
+        </div>
+        <div id="schedCheckResults" style="max-height:340px;overflow-y:auto">
+          <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>
+        </div>
+      </div>
+
+      <!-- Print tab -->
+      <div class="sched-tab-panel" id="schedPanel-print">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+          Εκτύπωση εβδομαδιαίου προγράμματος σε PDF ή εκτυπωτή (οριζόντια διάταξη Α4).
+        </p>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Ημέρα εβδομάδας</label>
+            <input type="date" id="schedPrintDate"
+              style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <button class="btn-primary" onclick="printWeeklySchedule()">🖨 Εκτύπωση</button>
+        </div>
+      </div>
+
+      <!-- Changes tab -->
+      <div class="sched-tab-panel" id="schedPanel-changes">
+        <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+          Διαφορές μεταξύ προγράμματος και δεδομένων κάρτας.<br>
+          Εξαγωγή μόνο των αλλαγών (διορθώσεις χρόνων, νέες εγγραφές, άδειες).
+        </p>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
+            <input type="month" id="changesMonth" onchange="renderChangesPreview()"
+              style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Ανοχή (λεπτά)</label>
+            <input type="number" id="changesTolerance" value="15" min="0" max="120"
+              style="width:64px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
+          <button class="btn-secondary" onclick="runComputeCorrections()">🔄 Επανυπολογισμός διαφορών</button>
+          <button class="btn-primary" onclick="exportChangesAsJson()">📝 Λήψη JSON αλλαγών</button>
+        </div>
+        <div id="schedChangesResults">
+          <p style="color:#9ca3af;font-size:13px">Φορτώστε δεδομένα κάρτας για να δείτε τις διαφορές.</p>
+        </div>
+      </div>
+
+      <div class="modal-buttons" style="margin-top:16px">
+        <button class="btn-secondary" onclick="closeModal('scheduleModal')">Κλείσιμο</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5b. Card time-correction mini-modal -->
+  <div class="modal" id="cardEditModal">
+    <div class="modal-content" style="max-width:320px">
+      <h2 style="font-size:16px;margin-bottom:12px">📋 Διόρθωση χρόνων κάρτας</h2>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+          Είσοδος&nbsp;<input type="time" id="cardEditIn"
+            style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+          Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut"
+            style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+        </label>
+        <div id="cardEdit2ndRow" style="display:none;border-top:1px solid #e5e7eb;padding-top:10px;margin-top:2px">
+          <div style="font-size:12px;color:#92400e;margin-bottom:6px;font-weight:600">2η Βάρδια</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+              Είσοδος&nbsp;<input type="time" id="cardEditIn2"
+                style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px">
+              Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut2"
+                style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-primary" onclick="saveCardTimeEdit()">Αποθήκευση</button>
+        <button class="btn-secondary" onclick="closeModal('cardEditModal')">Άκυρο</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Correction modal (schedule vs card difference) -->
+  <div class="modal" id="correctionModal">
+    <div class="modal-content" style="max-width:380px">
+      <h2 style="font-size:16px;margin-bottom:12px">Διόρθωση</h2>
+      <input type="hidden" id="corrVat">
+      <input type="hidden" id="corrDate">
+      <div style="font-size:13px;margin-bottom:10px">
+        <strong id="corrEmpName"></strong> &mdash; <span id="corrDateDisplay"></span>
+      </div>
+      <div id="corrInfo" style="font-size:12px;color:#374151;margin-bottom:14px;line-height:1.6"></div>
+      <div id="corrAbsenceFields">
+        <div class="form-group" style="margin-bottom:10px">
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Τύπος</label>
+          <select id="corrAbsenceType"
+            style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+            <option value="">-- Επιλέξτε --</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Έναρξη 2</label>
-          <input type="text" id="shiftStart2" value="" placeholder="HH:MM" class="time-input-24h">
-        </div>
-        <div class="form-group">
-          <label>Λήξη 2</label>
-          <input type="text" id="shiftEnd2" value="" placeholder="HH:MM" class="time-input-24h">
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Αιτιολογία (προαιρετικά)</label>
+          <input type="text" id="corrReason"
+            style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
         </div>
       </div>
-    </div>
-    <div class="form-group" id="absenceReasonGroup" style="display:none">
-      <label>Αιτιολογία (προαιρετικά)</label>
-      <input type="text" id="absenceReason" placeholder="π.χ. Άδεια">
-    </div>
-    <div class="modal-buttons">
-      <button class="btn-danger" onclick="clearShift()">🗑 Διαγραφή</button>
-      <button class="btn-secondary" onclick="closeModal('shiftModal')">Ακύρωση</button>
-      <button class="btn-primary" onclick="saveShift()">💾 Αποθήκευση</button>
+      <div class="modal-buttons" style="margin-top:14px">
+        <button class="btn-primary" onclick="saveCorrection()">Αποθήκευση</button>
+        <button class="btn-secondary" onclick="closeModal('correctionModal')">Άκυρο</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- 4. Card Modal (tabbed: Load / Save / Check / Clear) -->
-<div class="modal" id="cardImportModal">
-  <div class="modal-content" style="max-width:620px">
-    <h2>📁 Κάρτα</h2>
-
-    <div class="card-tabs">
-      <button class="card-tab-btn active" id="cardTab-load"  onclick="_cardTabSwitch('load')">📂 Φόρτωση</button>
-      <button class="card-tab-btn"        id="cardTab-save"  onclick="_cardTabSwitch('save')">💾 Αποθήκευση</button>
-      <button class="card-tab-btn"        id="cardTab-check" onclick="_cardTabSwitch('check')">🔍 Έλεγχος</button>
-      <button class="card-tab-btn"        id="cardTab-clear" onclick="_cardTabSwitch('clear')">🗑 Εκκαθάριση</button>
-    </div>
-
-    <!-- Load tab -->
-    <div class="card-tab-panel active" id="cardPanel-load">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-        Αρχείο CSV, TXT ή XLSX με στήλες: <code>employee, date, in, out</code><br>
-        ή μορφή: <code>ΑΦΜ YYYY-MM-DD HH:MM-HH:MM</code>
-      </p>
-      <div class="form-group">
-        <label>Αρχείο Κάρτας</label>
-        <input type="file" id="cardFileInput" accept=".csv,.txt,.xlsx,.xls"
-               onchange="handleCardFileSelect(this)">
+  <!-- 5. Timeline Modal (day-level schedule + card view) -->
+  <div class="modal" id="timelineModal">
+    <div class="modal-content timeline-modal">
+      <div class="timeline-header">
+        <h2 id="timelineModalTitle">📊 Daily Timeline</h2>
+        <div class="timeline-day-selector" id="timelineDaySelector"></div>
       </div>
-      <div class="form-group" style="margin-top:8px">
-        <label style="font-size:12px;color:#6b7280">Ανοχή σύγκρισης (λεπτά)</label>
-        <input type="number" id="corrToleranceInput" value="15" min="0" max="120"
-               style="width:70px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
-      </div>
-      <div id="cardImportStatus"></div>
-      <div style="border-top:1px solid #e5e7eb;margin-top:14px;padding-top:12px">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:8px;font-weight:600">Αποθηκευμένοι μήνες</p>
-        <div id="cardSavedMonthsList">
-          <span style="color:#9ca3af;font-size:12px">Δεν υπάρχουν αποθηκευμένοι μήνες.</span>
-        </div>
+      <div class="timeline-grid" id="timelineGrid"></div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="closeModal('timelineModal')">Κλείσιμο</button>
       </div>
     </div>
+  </div>
 
-    <!-- Save tab -->
-    <div class="card-tab-panel" id="cardPanel-save">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
-        Αποθήκευση δεδομένων κάρτας και διορθώσεων για τον τρέχοντα μήνα.
-      </p>
-      <div id="cardSaveStatus" style="font-size:12px;color:#6b7280;margin-bottom:12px;min-height:18px"></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn-primary" onclick="saveMonthlyCard()">💾 Αποθήκευση μήνα</button>
-        <button class="btn-secondary" onclick="exportCardData()">📥 Λήψη XLSX</button>
-      </div>
-    </div>
-
-    <!-- Check tab -->
-    <div class="card-tab-panel" id="cardPanel-check">
+  <!-- 7. Summary Modal -->
+  <div class="modal" id="summaryModal">
+    <div class="modal-content" style="max-width:95vw;width:1200px">
+      <h2>Σύνοψη Ωρών</h2>
       <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
         <div>
           <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
-          <input type="month" id="cardCheckMonth" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <input type="month" id="summaryMonth"
+            style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
         </div>
-        <button class="btn-primary" onclick="runCardCheck()">▶ Εκτέλεση</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn-secondary btn-sm" id="summaryViewWeek" onclick="renderSummary('week')"
+            style="font-weight:700">Εβδομάδα</button>
+          <button class="btn-secondary btn-sm" id="summaryViewMonth" onclick="renderSummary('month')">Μήνας</button>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn-secondary btn-sm" id="summaryViewCardWeek" onclick="renderSummary('cardWeek')"
+            style="color:#92400e">Κάρτα Εβδ.</button>
+          <button class="btn-secondary btn-sm" id="summaryViewCardMonth" onclick="renderSummary('cardMonth')"
+            style="color:#92400e">Κάρτα Μήν.</button>
+        </div>
+        <button class="btn-primary" onclick="renderSummary()">Εμφάνιση</button>
       </div>
-      <div id="cardCheckResults" style="max-height:340px;overflow-y:auto">
-        <p style="color:#9ca3af;font-size:13px">Φορτώστε αρχείο κάρτας, επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>
+      <div id="summaryResults" style="max-height:70vh;overflow:auto">
+        <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εμφάνιση».</p>
       </div>
-    </div>
-
-    <!-- Clear tab -->
-    <div class="card-tab-panel" id="cardPanel-clear">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
-        Διαγραφή όλων των δεδομένων κάρτας από τη μνήμη.<br>
-        Τα δεδομένα δεν διαγράφονται από το αρχείο σας.
-      </p>
-      <div id="cardClearStatus" style="font-size:12px;color:#6b7280;margin-bottom:12px;min-height:18px"></div>
-      <button class="btn-danger" onclick="clearCardData()">🗑 Εκκαθάριση δεδομένων κάρτας</button>
-    </div>
-
-    <div class="modal-buttons" style="margin-top:20px">
-      <button class="btn-secondary" onclick="closeModal('cardImportModal')">Κλείσιμο</button>
+      <div class="modal-buttons" style="margin-top:16px">
+        <button class="btn-secondary" onclick="closeModal('summaryModal')">Κλείσιμο</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- 5a. Schedule modal (tabbed: Load / Save / Check / Print) -->
-<div class="modal" id="scheduleModal">
-  <div class="modal-content" style="max-width:620px">
-    <h2>📅 Πρόγραμμα</h2>
-
-    <div class="sched-tabs">
-      <button class="sched-tab-btn active" id="schedTab-load"  onclick="_schedTabSwitch('load')">📂 Φόρτωση</button>
-      <button class="sched-tab-btn"        id="schedTab-save"  onclick="_schedTabSwitch('save')">💾 Αποθήκευση</button>
-      <button class="sched-tab-btn"        id="schedTab-check" onclick="_schedTabSwitch('check')">🔍 Έλεγχος</button>
-      <button class="sched-tab-btn"        id="schedTab-print" onclick="_schedTabSwitch('print')">🖨 Εκτύπωση</button>
-      <button class="sched-tab-btn"        id="schedTab-changes" onclick="_schedTabSwitch('changes')">📝 Αλλαγές</button>
-    </div>
-
-    <!-- Load tab -->
-    <div class="sched-tab-panel active" id="schedPanel-load">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-        Υποστηριζόμενες μορφές: <strong>JSON</strong> (εξαγωγή eSchedule) ή <strong>XLSX</strong> (μορφή Εργάνη).<br>
-        Η εισαγωγή συγχωνεύει τα δεδομένα με τα υπάρχοντα.
-      </p>
-      <div id="schedLoadStatus" style="font-size:12px;color:#6b7280;margin-bottom:10px;min-height:18px"></div>
-      <button class="btn-primary" onclick="importSchedule()">📂 Επιλογή αρχείου…</button>
-    </div>
-
-    <!-- Save tab -->
-    <div class="sched-tab-panel" id="schedPanel-save">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
-        Αποθήκευση ολόκληρου του προγράμματος (εργαζόμενοι, βάρδιες, ρυθμίσεις) σε αρχείο JSON.<br>
-        Το αρχείο μπορεί να επαναφορτωθεί από την καρτέλα <em>Φόρτωση</em>.
-      </p>
-      <button class="btn-primary" onclick="exportScheduleAsJson()">💾 Λήψη JSON</button>
-    </div>
-
-    <!-- Check tab -->
-    <div class="sched-tab-panel" id="schedPanel-check">
-      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
-        <div>
-          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
-          <input type="month" id="schedCheckMonth" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-        </div>
-        <button class="btn-primary" onclick="runScheduleCheck()">▶ Εκτέλεση</button>
-      </div>
-      <div id="schedCheckResults" style="max-height:340px;overflow-y:auto">
-        <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εκτέλεση».</p>
-      </div>
-    </div>
-
-    <!-- Print tab -->
-    <div class="sched-tab-panel" id="schedPanel-print">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
-        Εκτύπωση εβδομαδιαίου προγράμματος σε PDF ή εκτυπωτή (οριζόντια διάταξη Α4).
-      </p>
-      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
-        <div>
-          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Ημέρα εβδομάδας</label>
-          <input type="date" id="schedPrintDate" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-        </div>
-        <button class="btn-primary" onclick="printWeeklySchedule()">🖨 Εκτύπωση</button>
-      </div>
-    </div>
-
-    <!-- Changes tab -->
-    <div class="sched-tab-panel" id="schedPanel-changes">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
-        Διαφορές μεταξύ προγράμματος και δεδομένων κάρτας.<br>
-        Εξαγωγή μόνο των αλλαγών (διορθώσεις χρόνων, νέες εγγραφές, άδειες).
-      </p>
-      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
-        <div>
-          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
-          <input type="month" id="changesMonth" onchange="renderChangesPreview()"
-                 style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-        </div>
-        <div>
-          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Ανοχή (λεπτά)</label>
-          <input type="number" id="changesTolerance" value="15" min="0" max="120"
-                 style="width:64px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-        </div>
-        <button class="btn-secondary" onclick="runComputeCorrections()">🔄 Υπολογισμός διαφορών</button>
-        <button class="btn-primary" onclick="exportChangesAsJson()">📝 Λήψη JSON αλλαγών</button>
-      </div>
-      <div id="schedChangesResults">
-        <p style="color:#9ca3af;font-size:13px">Φορτώστε δεδομένα κάρτας για να δείτε τις διαφορές.</p>
-      </div>
-    </div>
-
-    <div class="modal-buttons" style="margin-top:16px">
-      <button class="btn-secondary" onclick="closeModal('scheduleModal')">Κλείσιμο</button>
-    </div>
-  </div>
-</div>
-
-<!-- 5b. Card time-correction mini-modal -->
-<div class="modal" id="cardEditModal">
-  <div class="modal-content" style="max-width:320px">
-    <h2 style="font-size:16px;margin-bottom:12px">📋 Διόρθωση χρόνων κάρτας</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:8px;font-size:14px">
-        Είσοδος&nbsp;<input type="time" id="cardEditIn" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:14px">
-        Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
-      </label>
-      <div id="cardEdit2ndRow" style="display:none;border-top:1px solid #e5e7eb;padding-top:10px;margin-top:2px">
-        <div style="font-size:12px;color:#92400e;margin-bottom:6px;font-weight:600">2η Βάρδια</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <label style="display:flex;align-items:center;gap:8px;font-size:14px">
-            Είσοδος&nbsp;<input type="time" id="cardEditIn2" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:14px">
-            Έξοδος&nbsp;&nbsp;<input type="time" id="cardEditOut2" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px">
-          </label>
-        </div>
-      </div>
-    </div>
-    <div class="modal-buttons">
-      <button class="btn-primary" onclick="saveCardTimeEdit()">Αποθήκευση</button>
-      <button class="btn-secondary" onclick="closeModal('cardEditModal')">Άκυρο</button>
-    </div>
-  </div>
-</div>
-
-<!-- Correction modal (schedule vs card difference) -->
-<div class="modal" id="correctionModal">
-  <div class="modal-content" style="max-width:380px">
-    <h2 style="font-size:16px;margin-bottom:12px">Διόρθωση</h2>
-    <input type="hidden" id="corrVat">
-    <input type="hidden" id="corrDate">
-    <div style="font-size:13px;margin-bottom:10px">
-      <strong id="corrEmpName"></strong> &mdash; <span id="corrDateDisplay"></span>
-    </div>
-    <div id="corrInfo" style="font-size:12px;color:#374151;margin-bottom:14px;line-height:1.6"></div>
-    <div id="corrAbsenceFields">
-      <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Τύπος</label>
-        <select id="corrAbsenceType" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          <option value="">-- Επιλέξτε --</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Αιτιολογία (προαιρετικά)</label>
-        <input type="text" id="corrReason" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-    </div>
-    <div class="modal-buttons" style="margin-top:14px">
-      <button class="btn-primary" onclick="saveCorrection()">Αποθήκευση</button>
-      <button class="btn-secondary" onclick="closeModal('correctionModal')">Άκυρο</button>
-    </div>
-  </div>
-</div>
-
-<!-- 5. Timeline Modal (day-level schedule + card view) -->
-<div class="modal" id="timelineModal">
-  <div class="modal-content timeline-modal">
-    <div class="timeline-header">
-      <h2 id="timelineModalTitle">📊 Daily Timeline</h2>
-      <div class="timeline-day-selector" id="timelineDaySelector"></div>
-    </div>
-    <div class="timeline-grid" id="timelineGrid"></div>
-    <div class="modal-buttons">
-      <button class="btn-secondary" onclick="closeModal('timelineModal')">Κλείσιμο</button>
-    </div>
-  </div>
-</div>
-
-<!-- 7. Summary Modal -->
-<div class="modal" id="summaryModal">
-  <div class="modal-content" style="max-width:95vw;width:1200px">
-    <h2>Σύνοψη Ωρών</h2>
-    <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
-      <div>
-        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
-        <input type="month" id="summaryMonth" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div style="display:flex;gap:4px">
-        <button class="btn-secondary btn-sm" id="summaryViewWeek" onclick="renderSummary('week')" style="font-weight:700">Εβδομάδα</button>
-        <button class="btn-secondary btn-sm" id="summaryViewMonth" onclick="renderSummary('month')">Μήνας</button>
-      </div>
-      <div style="display:flex;gap:4px">
-        <button class="btn-secondary btn-sm" id="summaryViewCardWeek" onclick="renderSummary('cardWeek')" style="color:#92400e">Κάρτα Εβδ.</button>
-        <button class="btn-secondary btn-sm" id="summaryViewCardMonth" onclick="renderSummary('cardMonth')" style="color:#92400e">Κάρτα Μήν.</button>
-      </div>
-      <button class="btn-primary" onclick="renderSummary()">Εμφάνιση</button>
-    </div>
-    <div id="summaryResults" style="max-height:70vh;overflow:auto">
-      <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εμφάνιση».</p>
-    </div>
-    <div class="modal-buttons" style="margin-top:16px">
-      <button class="btn-secondary" onclick="closeModal('summaryModal')">Κλείσιμο</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════════
+  <!-- ═══════════════════════════════════════════════════════════════
      SCRIPTS  (order matters — dependencies first)
      ═══════════════════════════════════════════════════════════════ -->
-<script src="config.js"></script>
-<script src="adeies.js"></script>
-<script src="argies.js"></script>
-<script src="app-state.js"></script>
-<script src="date-utils.js"></script>
-<script src="data-storage.js"></script>
-<script src="payroll.js"></script>
-<script src="hours-calc.js"></script>
-<script src="shift-helpers.js"></script>
-<script src="employees.js"></script>
-<script src="shifts.js"></script>
-<script src="card-diff.js"></script>
+  <script src="config.js"></script>
+  <script src="adeies.js"></script>
+  <script src="argies.js"></script>
+  <script src="app-state.js"></script>
+  <script src="date-utils.js"></script>
+  <script src="data-storage.js"></script>
+  <script src="payroll.js"></script>
+  <script src="hours-calc.js"></script>
+  <script src="shift-helpers.js"></script>
+  <script src="employees.js"></script>
+  <script src="shifts.js"></script>
+  <script src="card-diff.js"></script>
 
-<script src="schedule.js"></script>  <!-- provides ensureRestShiftsForWeek, copyPreviousWeekToCurrentWeek -->
-<script src="timeline.js"></script>  <!-- day-level timeline modal + drag handlers -->
-<script src="import-data.js"></script> <!-- importSchedule / importXlsxScheduleFile / mergeImportedState -->
-<script src="print-schedule.js"></script>
-<script src="grid.js"></script>      <!-- overrides renderAll() and renderTimeline() with card-data extensions -->
-<script src="selection.js"></script> <!-- multi-cell Ctrl+click selection -->
+  <script src="schedule.js"></script> <!-- provides ensureRestShiftsForWeek, copyPreviousWeekToCurrentWeek -->
+  <script src="timeline.js"></script> <!-- day-level timeline modal + drag handlers -->
+  <script src="import-data.js"></script> <!-- importSchedule / importXlsxScheduleFile / mergeImportedState -->
+  <script src="print-schedule.js"></script>
+  <script src="grid.js"></script> <!-- overrides renderAll() and renderTimeline() with card-data extensions -->
+  <script src="selection.js"></script> <!-- multi-cell Ctrl+click selection -->
 
-<script>
-// ─── App Initialisation ────────────────────────────────────────────────
-currentWeekStart = getMonday(new Date())
+  <script>
+    // ─── App Initialisation ────────────────────────────────────────────────
+    currentWeekStart = getMonday(new Date())
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // Populate absence options in shift type selector
-  populateAdeiesInShiftType()
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Populate absence options in shift type selector
+      populateAdeiesInShiftType()
 
-  // Load persisted data
-  await loadData()
+      // Load persisted data
+      await loadData()
 
-  // Initialise view: start on Monday of current week
-  viewStart = new Date(currentWeekStart)
+      // Initialise view: start on Monday of current week
+      viewStart = new Date(currentWeekStart)
 
-  // Ensure rest shifts for the initial view
-  _ensureRestForView()
-  await saveData()
+      // Ensure rest shifts for the initial view
+      _ensureRestForView()
+      await saveData()
 
-  // First render
-  renderGrid()
+      // First render
+      renderGrid()
 
-  // Auto-save on tab/window close
-  window.addEventListener('beforeunload', () => {
-    try {
-      const payload = JSON.stringify(sanitizeStateForPersist(data))
-      localStorage.setItem(STORAGE_KEY, payload)
-    } catch {}
-  })
+      // Auto-save on tab/window close
+      window.addEventListener('beforeunload', () => {
+        try {
+          const payload = JSON.stringify(sanitizeStateForPersist(data))
+          localStorage.setItem(STORAGE_KEY, payload)
+        } catch { }
+      })
 
-  // Periodic auto-save every 15 s
-  setInterval(() => saveData(), 15000)
-})
-</script>
+      // Periodic auto-save every 15 s
+      setInterval(() => saveData(), 15000)
+    })
+  </script>
 </body>
+
 </html>
