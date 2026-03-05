@@ -7,6 +7,9 @@ let viewStart = null // leftmost day shown (any day of week)
 let cardData = {} // keyed "vat_YYYY-MM-DD" → {start, end, guessed}
 let cardVirtualEmployees = [] // temp employee records from card file
 let cardMissingTimeCount = {} // keyed "vat_YYYY-MM" → count of entries with missing in/out time
+let shiftCorrections = {} // "vat_YYYY-MM-DD" → correction object
+let correctionTolerance = 15 // minutes — configurable
+let selectedCorrCells = [] // [{vat, dateStr}] for multi-select correction editing
 
 // ─── Navigation ──────────────────────────────────────────────────────────
 function changeView(dayDelta) {
@@ -79,7 +82,7 @@ function renderGrid() {
   })
 
   // ── Header ──
-  let html = '<thead><tr><th class="emp-col">Εργαζόμενος</th>'
+  let html = '<thead><tr><th class="emp-col" style="cursor:pointer" onclick="openEmployeeListModal()" title="Διαχείριση εργαζομένων">👥 Εργαζόμενος</th>'
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(viewStart)
     dayDate.setDate(dayDate.getDate() + i)
@@ -101,7 +104,7 @@ function renderGrid() {
   // ── Employee rows ──
   if (allEmployees.length === 0) {
     html +=
-      '<tr><td colspan="8" class="empty-grid">Δεν υπάρχουν εργαζόμενοι.<br>Κάντε κλικ στο «👥 Εργαζόμενοι» για να προσθέσετε.</td></tr>'
+      '<tr><td colspan="8" class="empty-grid">Δεν υπάρχουν εργαζόμενοι.<br>Κάντε κλικ στο «👥 Εργαζόμενος» στην κεφαλίδα για να προσθέσετε.</td></tr>'
   }
 
   allEmployees.forEach((emp) => {
@@ -176,12 +179,15 @@ function renderGrid() {
       })()
       const overnightCls = (isOvernightOut ? ' overnight-out' : '') + (spilloverSegs.length ? ' overnight-in' : '')
 
+      const corrEntry = shiftCorrections[`${emp.vat}_${dateStr}`]
+      const missingCardCorr = corrEntry && corrEntry.corrType === 'missing_card'
       html += `<td class="day-cell${isHolSun ? ' holiday-day' : ''}${isSelected ? ' cell-selected' : ''}${overnightCls}"
                    data-vat="${emp.vat}"
                    data-date="${dateStr}"
                    onclick="handleDayCellClick(event,'${String(emp.vat)}','${dateStr}')">
         ${renderShiftBar(shift, isHolSun, gapHours, prevGapH, spilloverSegs, String(emp.vat))}
         ${cardEntry ? renderCardBar(cardEntry, isIllegalCard, monthMissing, cardGapH) : ''}
+        ${missingCardCorr ? renderMissingCardBar(corrEntry, String(emp.vat), dateStr) : ''}
       </td>`
     }
     html += '</tr>'
@@ -478,10 +484,14 @@ function _cardTabSwitch(name) {
     document.getElementById(`cardPanel-${t}`).classList.toggle('active', t === name)
   })
   // Refresh status labels when switching
+  if (name === 'load') {
+    refreshSavedMonthsList()
+  }
   if (name === 'save') {
     const n = Object.keys(cardData).length
+    const month = detectCardMonth()
     document.getElementById('cardSaveStatus').textContent = n
-      ? `${n} εγγραφές έτοιμες για εξαγωγή.`
+      ? `${n} εγγραφές (${month || '—'}) — έτοιμες για αποθήκευση.`
       : 'Δεν υπάρχουν φορτωμένα δεδομένα κάρτας.'
   }
   if (name === 'check') {
@@ -509,10 +519,141 @@ function clearCardData() {
   cardData = {}
   cardVirtualEmployees = []
   cardMissingTimeCount = {}
+  shiftCorrections = {}
+  selectedCorrCells = []
   renderGrid()
   document.getElementById('cardImportStatus').textContent = ''
   document.getElementById('cardClearStatus').textContent = 'Τα δεδομένα κάρτας διαγράφηκαν.'
   _cardTabSwitch('load')
+}
+
+// ─── Monthly card + corrections persistence ─────────────────────────────
+
+function detectCardMonth() {
+  const keys = Object.keys(cardData)
+  if (!keys.length) return null
+  // Count occurrences of each YYYY-MM
+  const counts = {}
+  keys.forEach((k) => {
+    const m = k.match(/_(\d{4}-\d{2})/)
+    if (m) counts[m[1]] = (counts[m[1]] || 0) + 1
+  })
+  // Return the most common month
+  let best = null, bestN = 0
+  for (const [month, n] of Object.entries(counts)) {
+    if (n > bestN) { best = month; bestN = n }
+  }
+  return best
+}
+
+async function saveMonthlyCard() {
+  const month = detectCardMonth()
+  if (!month) { alert('Δεν υπάρχουν δεδομένα κάρτας.'); return }
+  const payload = {
+    cardData,
+    cardVirtualEmployees,
+    cardMissingTimeCount,
+    shiftCorrections,
+    correctionTolerance,
+    savedAt: Date.now(),
+  }
+  try {
+    const db = await idbOpen()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      tx.objectStore(IDB_STORE).put(JSON.stringify(payload), `card_${month}`)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+    const statusEl = document.getElementById('cardSaveStatus')
+    if (statusEl) statusEl.textContent = `Αποθηκεύτηκε μήνας ${month}.`
+  } catch (e) {
+    alert('Σφάλμα αποθήκευσης: ' + e.message)
+  }
+}
+
+async function listSavedCardMonths() {
+  try {
+    const db = await idbOpen()
+    const keys = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly')
+      const req = tx.objectStore(IDB_STORE).getAllKeys()
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    return keys
+      .filter((k) => String(k).startsWith('card_'))
+      .map((k) => String(k).slice(5))
+      .sort()
+      .reverse()
+  } catch {
+    return []
+  }
+}
+
+async function loadMonthlyCard(month) {
+  if (!month) { alert('Επιλέξτε μήνα.'); return }
+  try {
+    const db = await idbOpen()
+    const raw = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly')
+      const req = tx.objectStore(IDB_STORE).get(`card_${month}`)
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    if (!raw) { alert('Δεν βρέθηκαν δεδομένα για ' + month); return }
+    const payload = JSON.parse(raw)
+    cardData = payload.cardData || {}
+    cardVirtualEmployees = payload.cardVirtualEmployees || []
+    cardMissingTimeCount = payload.cardMissingTimeCount || {}
+    shiftCorrections = payload.shiftCorrections || {}
+    correctionTolerance = payload.correctionTolerance || 15
+    const tolInput = document.getElementById('corrToleranceInput')
+    if (tolInput) tolInput.value = correctionTolerance
+    renderGrid()
+    const statusEl = document.getElementById('cardImportStatus')
+    if (statusEl) statusEl.textContent = `Φορτώθηκε μήνας ${month} (${Object.keys(cardData).length} εγγραφές).`
+    closeModal('cardImportModal')
+  } catch (e) {
+    alert('Σφάλμα φόρτωσης: ' + e.message)
+  }
+}
+
+async function deleteMonthlyCard(month) {
+  if (!month) return
+  if (!confirm(`Διαγραφή αποθηκευμένων δεδομένων για ${month};`)) return
+  try {
+    const db = await idbOpen()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      tx.objectStore(IDB_STORE).delete(`card_${month}`)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+    await refreshSavedMonthsList()
+  } catch (e) {
+    alert('Σφάλμα: ' + e.message)
+  }
+}
+
+async function refreshSavedMonthsList() {
+  const listEl = document.getElementById('cardSavedMonthsList')
+  if (!listEl) return
+  const months = await listSavedCardMonths()
+  if (!months.length) {
+    listEl.innerHTML = '<span style="color:#9ca3af;font-size:12px">Δεν υπάρχουν αποθηκευμένοι μήνες.</span>'
+    return
+  }
+  listEl.innerHTML = months.map((m) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <button class="btn-primary" style="font-size:12px;padding:3px 10px" onclick="loadMonthlyCard('${m}')">📂 ${m}</button>
+      <button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px" onclick="deleteMonthlyCard('${m}')" title="Διαγραφή">✕</button>
+    </div>`
+  ).join('')
 }
 
 function exportCardData() {
@@ -1216,7 +1357,7 @@ function openScheduleCheckModal() {
 }
 
 function _schedTabSwitch(name) {
-  ;['load', 'save', 'check', 'print'].forEach((t) => {
+  ;['load', 'save', 'check', 'print', 'changes'].forEach((t) => {
     document.getElementById(`schedTab-${t}`).classList.toggle('active', t === name)
     document.getElementById(`schedPanel-${t}`).classList.toggle('active', t === name)
   })
@@ -1228,6 +1369,23 @@ function _schedTabSwitch(name) {
   if (name === 'print') {
     document.getElementById('schedPrintDate').value = formatDate(getMonday(now))
   }
+  if (name === 'changes') {
+    const el = document.getElementById('changesMonth')
+    if (!el.value) {
+      // Default to detected card month, or current month
+      const cardMonth = detectCardMonth()
+      if (cardMonth) {
+        el.value = cardMonth
+      } else {
+        const now = viewStart || new Date()
+        el.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      }
+    }
+    // Sync tolerance value from card Load tab or current setting
+    const tolTarget = document.getElementById('changesTolerance')
+    if (tolTarget) tolTarget.value = correctionTolerance
+    renderChangesPreview()
+  }
 }
 
 function exportScheduleAsJson() {
@@ -1237,6 +1395,365 @@ function exportScheduleAsJson() {
   const a = document.createElement('a')
   a.href = url
   a.download = `eschedule_${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ─── Corrections (schedule vs card comparison) ─────────────────────────────
+
+function runComputeCorrections() {
+  if (Object.keys(cardData).length === 0) {
+    alert('Δεν υπάρχουν δεδομένα κάρτας. Φορτώστε πρώτα αρχείο κάρτας.')
+    return
+  }
+  // Read tolerance from the Changes tab input (or fall back to card Load tab input)
+  const tolEl = document.getElementById('changesTolerance') || document.getElementById('corrToleranceInput')
+  if (tolEl) correctionTolerance = parseInt(tolEl.value, 10) || 15
+  computeCorrections()
+  renderGrid()
+  renderChangesPreview()
+}
+
+function computeCorrections() {
+  shiftCorrections = {}
+  // Collect all relevant keys from both schedule and card
+  const allKeys = new Set([...Object.keys(data.shifts), ...Object.keys(cardData)])
+  for (const key of allKeys) {
+    const shift = data.shifts[key]
+    const card = cardData[key]
+    const dateStr = key.slice(key.indexOf('_') + 1)
+    const dateObj = parseISODateLocal(dateStr)
+    const hasWorkShift = shift && isWorkingType(shift)
+    const hasCard = !!card
+
+    if (hasCard && !hasWorkShift) {
+      // Card exists but no scheduled work → new entry
+      shiftCorrections[key] = {
+        corrType: 'new_entry',
+        resolved: true,
+        type: 'ΕΡΓ',
+        start: card.start,
+        end: card.end,
+        start2: card.start2,
+        end2: card.end2,
+      }
+    } else if (hasWorkShift && !hasCard) {
+      // Schedule exists but no card
+      if (isDateSundayOrHoliday(dateObj)) continue // Sunday/holiday — skip
+      shiftCorrections[key] = {
+        corrType: 'missing_card',
+        resolved: false,
+        type: null,
+      }
+    } else if (hasWorkShift && hasCard) {
+      // Both exist — compare times
+      const tol = correctionTolerance
+      const sStart = toMinutes(shift.start)
+      const sEnd = toMinutes(shift.end)
+      const cStart = toMinutes(card.start)
+      const cEnd = toMinutes(card.end)
+      if (sStart == null || sEnd == null || cStart == null || cEnd == null) continue
+      const startDiff = Math.abs(sStart - cStart)
+      const endDiff = Math.abs(sEnd - cEnd)
+      // Check second segments too
+      let seg2Diff = false
+      if (shift.start2 || card.start2) {
+        const ss2 = shift.start2 ? toMinutes(shift.start2) : -1
+        const se2 = shift.end2 ? toMinutes(shift.end2) : -1
+        const cs2 = card.start2 ? toMinutes(card.start2) : -1
+        const ce2 = card.end2 ? toMinutes(card.end2) : -1
+        if (ss2 < 0 && cs2 >= 0) seg2Diff = true
+        else if (ss2 >= 0 && cs2 < 0) seg2Diff = true
+        else if (ss2 >= 0 && cs2 >= 0) {
+          seg2Diff = Math.abs(ss2 - cs2) > tol || Math.abs(se2 - ce2) > tol
+        }
+      }
+      if (startDiff > tol || endDiff > tol || seg2Diff) {
+        shiftCorrections[key] = {
+          corrType: 'time_diff',
+          resolved: true,
+          type: shift.type,
+          start: card.start,
+          end: card.end,
+          start2: card.start2,
+          end2: card.end2,
+          type2: shift.type2,
+        }
+      }
+    }
+  }
+}
+
+function renderMissingCardBar(corr, vat, dateStr) {
+  if (!corr) return ''
+  const isSel = selectedCorrCells.some((c) => c.vat === vat && c.dateStr === dateStr)
+  let inner
+  if (corr.resolved) {
+    const label = corr.type ? absenceLabel(corr.type) : '—'
+    inner = `<div class="bar bar-corr-resolved"><span class="corr-label">${label}</span></div>`
+  } else {
+    inner = `<div class="bar bar-corr-pending"><span class="corr-label">?</span></div>`
+  }
+  return `<div class="bar-wrap card-bar-wrap corr-bar-wrap${isSel ? ' corr-selected' : ''}" onclick="event.stopPropagation();handleCorrBarClick(event,'${vat}','${dateStr}')">${inner}</div>`
+}
+
+function handleCorrBarClick(event, vat, dateStr) {
+  if (event.ctrlKey || event.metaKey || isMultiSelectMode) {
+    // Toggle correction cell selection
+    const idx = selectedCorrCells.findIndex((c) => c.vat === vat && c.dateStr === dateStr)
+    if (idx >= 0) {
+      selectedCorrCells.splice(idx, 1)
+    } else {
+      selectedCorrCells.push({ vat, dateStr })
+    }
+    renderGrid()
+  } else if (selectedCorrCells.length > 0) {
+    // Already have selection — check if clicking a selected cell
+    const isSel = selectedCorrCells.some((c) => c.vat === vat && c.dateStr === dateStr)
+    if (isSel) {
+      openCorrectionModalForSelection()
+    } else {
+      selectedCorrCells = []
+      openCorrectionModal(vat, dateStr)
+    }
+  } else {
+    openCorrectionModal(vat, dateStr)
+  }
+}
+
+function openCorrectionModalForSelection() {
+  if (!selectedCorrCells.length) return
+  const modal = document.getElementById('correctionModal')
+  if (!modal) return
+
+  // Populate dropdown
+  const sel = document.getElementById('corrAbsenceType')
+  if (sel && sel.options.length <= 1) {
+    ;[
+      { code: 'AN',  label: 'Ανάπαυση / Ρεπό (AN)' },
+      { code: 'ΜΕ',  label: 'Μη Εργασια (ΜΕ)' },
+    ].forEach((s) => {
+      const opt = document.createElement('option')
+      opt.value = s.code
+      opt.textContent = s.label
+      sel.appendChild(opt)
+    })
+    getAdeies().forEach((a) => {
+      if (a.code === 'ΜΕ') return
+      const opt = document.createElement('option')
+      opt.value = a.code
+      opt.textContent = `${a.name}${a.paid ? ' (με αποδοχές)' : ''}`
+      sel.appendChild(opt)
+    })
+  }
+
+  document.getElementById('corrVat').value = 'multi'
+  document.getElementById('corrDate').value = 'multi'
+  document.getElementById('corrEmpName').textContent = `${selectedCorrCells.length} ημέρες`
+  document.getElementById('corrDateDisplay').textContent = ''
+  document.getElementById('corrInfo').innerHTML = `<div style="font-size:12px;color:#6b7280">${selectedCorrCells.length} κελιά επιλεγμένα</div>`
+  document.getElementById('corrAbsenceType').value = ''
+  document.getElementById('corrReason').value = ''
+
+  modal.classList.add('active')
+}
+
+function openCorrectionModal(vat, dateStr) {
+  const key = `${vat}_${dateStr}`
+  const corr = shiftCorrections[key]
+  if (!corr) return
+  const modal = document.getElementById('correctionModal')
+  if (!modal) return
+
+  // Populate correction type dropdown if needed (no ΕΡΓ/ΤΗΛ — only non-work types)
+  const sel = document.getElementById('corrAbsenceType')
+  if (sel && sel.options.length <= 1) {
+    ;[
+      { code: 'AN',  label: 'Ανάπαυση / Ρεπό (AN)' },
+      { code: 'ΜΕ',  label: 'Μη Εργασια (ΜΕ)' },
+    ].forEach((s) => {
+      const opt = document.createElement('option')
+      opt.value = s.code
+      opt.textContent = s.label
+      sel.appendChild(opt)
+    })
+    getAdeies().forEach((a) => {
+      if (a.code === 'ΜΕ') return // already added above
+      const opt = document.createElement('option')
+      opt.value = a.code
+      opt.textContent = `${a.name}${a.paid ? ' (με αποδοχές)' : ''}`
+      sel.appendChild(opt)
+    })
+  }
+
+  document.getElementById('corrVat').value = vat
+  document.getElementById('corrDate').value = dateStr
+
+  const emp = data.employees.find((e) => String(e.vat) === vat)
+  const empName = emp ? (emp.nickName || emp.vat) : vat
+  document.getElementById('corrEmpName').textContent = empName
+  document.getElementById('corrDateDisplay').textContent = dateStr
+
+  // Show original schedule and card info
+  const shift = data.shifts[key]
+  const card = cardData[key]
+  let infoHtml = ''
+  if (shift && isWorkingType(shift)) {
+    infoHtml += `<div><strong>Πρόγραμμα:</strong> ${shift.type} ${shift.start || ''}–${shift.end || ''}${shift.start2 ? ' / ' + shift.start2 + '–' + shift.end2 : ''}</div>`
+  } else {
+    infoHtml += `<div><strong>Πρόγραμμα:</strong> ${shift ? shift.type : '(κενό)'}</div>`
+  }
+  if (card) {
+    infoHtml += `<div><strong>Κάρτα:</strong> ${card.start}–${card.end}${card.start2 ? ' / ' + card.start2 + '–' + card.end2 : ''}</div>`
+  } else {
+    infoHtml += `<div><strong>Κάρτα:</strong> (δεν υπάρχει)</div>`
+  }
+  document.getElementById('corrInfo').innerHTML = infoHtml
+
+  // Populate values
+  document.getElementById('corrAbsenceType').value = corr.type || ''
+  document.getElementById('corrReason').value = corr.reason || ''
+
+  modal.classList.add('active')
+}
+
+function saveCorrection() {
+  const corrType = document.getElementById('corrAbsenceType').value
+  if (!corrType) {
+    alert('Επιλέξτε τύπο.')
+    return
+  }
+  const reason = document.getElementById('corrReason').value || undefined
+  const isMulti = document.getElementById('corrVat').value === 'multi'
+
+  if (isMulti) {
+    // Apply to all selected correction cells
+    for (const cell of selectedCorrCells) {
+      const key = `${cell.vat}_${cell.dateStr}`
+      const corr = shiftCorrections[key]
+      if (corr) {
+        corr.type = corrType
+        corr.reason = reason
+        corr.resolved = true
+      }
+    }
+    selectedCorrCells = []
+  } else {
+    const vat = document.getElementById('corrVat').value
+    const dateStr = document.getElementById('corrDate').value
+    const corr = shiftCorrections[`${vat}_${dateStr}`]
+    if (corr) {
+      corr.type = corrType
+      corr.reason = reason
+      corr.resolved = true
+    }
+  }
+
+  closeModal('correctionModal')
+  renderGrid()
+}
+
+function _correctionKeysForMonth(month) {
+  if (!month) return Object.keys(shiftCorrections)
+  return Object.keys(shiftCorrections).filter((k) => {
+    const dateStr = k.slice(k.indexOf('_') + 1)
+    return dateStr.startsWith(month)
+  })
+}
+
+function renderChangesPreview() {
+  const el = document.getElementById('schedChangesResults')
+  if (!el) return
+  if (!Object.keys(cardData).length) {
+    el.innerHTML = '<p style="color:#ef4444;font-size:13px">Δεν έχουν φορτωθεί δεδομένα κάρτας. Εισάγετε πρώτα αρχείο κάρτας.</p>'
+    return
+  }
+  const month = document.getElementById('changesMonth')?.value || ''
+  const keys = _correctionKeysForMonth(month)
+  if (!keys.length) {
+    el.innerHTML = `<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν διαφορές για ${month || 'όλους τους μήνες'}.</p>`
+    return
+  }
+  const resolved = keys.filter((k) => shiftCorrections[k].resolved).length
+  const pending = keys.length - resolved
+  let html = `<p style="font-size:13px;color:#6b7280;margin-bottom:10px"><strong>${keys.length}</strong> διαφορ${keys.length === 1 ? 'ά' : 'ές'}: <span style="color:#22c55e">${resolved} ολοκληρωμέν${resolved === 1 ? 'η' : 'ες'}</span>`
+  if (pending) html += `, <span style="color:#ef4444">${pending} εκκρεμ${pending === 1 ? 'ής' : 'είς'}</span>`
+  html += '</p>'
+  if (pending) {
+    html += '<p style="font-size:12px;color:#ef4444;margin-bottom:10px">Ορίστε τύπο για τις εκκρεμείς διαφορές πριν εξάγετε.</p>'
+  }
+  // Group by employee
+  const byEmp = {}
+  for (const key of keys) {
+    const vat = key.split('_')[0]
+    if (!byEmp[vat]) byEmp[vat] = []
+    const dateStr = key.slice(vat.length + 1)
+    byEmp[vat].push({ dateStr, corr: shiftCorrections[key] })
+  }
+  html += '<div style="max-height:240px;overflow-y:auto">'
+  for (const vat of Object.keys(byEmp)) {
+    const emp = data.employees.find((e) => String(e.vat) === vat)
+    const name = emp ? (emp.nickName || emp.vat) : vat
+    html += `<div style="margin-bottom:8px"><strong style="font-size:13px">${name}</strong><ul style="margin:4px 0 0 16px;font-size:12px;color:#374151">`
+    for (const c of byEmp[vat].sort((a, b) => a.dateStr.localeCompare(b.dateStr))) {
+      const corr = c.corr
+      const icon = corr.resolved ? '<span style="color:#22c55e">&#10003;</span>' : '<span style="color:#ef4444">&#10007;</span>'
+      let desc = ''
+      if (corr.corrType === 'time_diff') desc = `${corr.start}-${corr.end}${corr.start2 ? ' / ' + corr.start2 + '-' + corr.end2 : ''}`
+      else if (corr.corrType === 'new_entry') desc = `(νέα) ${corr.start}-${corr.end}`
+      else if (corr.corrType === 'missing_card') desc = corr.type ? absenceLabel(corr.type) : 'εκκρεμεί...'
+      html += `<li>${icon} ${c.dateStr}: ${desc}</li>`
+    }
+    html += '</ul></div>'
+  }
+  html += '</div>'
+  el.innerHTML = html
+}
+
+function exportChangesAsJson() {
+  if (!Object.keys(cardData).length) {
+    alert('Δεν έχουν φορτωθεί δεδομένα κάρτας.')
+    return
+  }
+  const month = document.getElementById('changesMonth')?.value || ''
+  const keys = _correctionKeysForMonth(month)
+  if (!keys.length) {
+    alert(`Δεν βρέθηκαν διαφορές για ${month || 'κανέναν μήνα'}.`)
+    return
+  }
+  const pending = keys.filter((k) => !shiftCorrections[k].resolved)
+  if (pending.length) {
+    alert(`Υπάρχουν ${pending.length} εκκρεμείς διαφορές για ${month}. Ορίστε τύπο πριν εξάγετε.`)
+    return
+  }
+  // Build export with only resolved corrections for the selected month
+  const shifts = {}
+  const affectedVats = new Set()
+  for (const key of keys) {
+    const corr = shiftCorrections[key]
+    const shift = {}
+    shift.type = corr.type
+    if (corr.start) { shift.start = corr.start; shift.end = corr.end }
+    if (corr.start2) { shift.start2 = corr.start2; shift.end2 = corr.end2 }
+    if (corr.type2) shift.type2 = corr.type2
+    if (corr.reason) shift.reason = corr.reason
+    shifts[key] = shift
+    affectedVats.add(key.split('_')[0])
+  }
+  const employees = data.employees.filter((e) => affectedVats.has(String(e.vat)))
+  const exportObj = {
+    companyName: data.companyName,
+    employees,
+    shifts,
+    weekHolidays: data.weekHolidays,
+    customHolidayNames: data.customHolidayNames,
+  }
+  const json = JSON.stringify(exportObj, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `eschedule_changes_${month || 'all'}.json`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -1468,23 +1985,56 @@ function runCardCheck() {
       })
     }
 
-    // Rule 2: monthly count of entries with missing in/out time (limit: 3)
-    const monthKey = `${vat}_${monthVal}`
-    const count = cardMissingTimeCount[monthKey] || 0
-    if (count > 3) {
+    // Rule 2: entries with missing start or end time (per entry, limit 3/month)
+    const missingEntries = []
+    Object.keys(cardData).forEach((key) => {
+      const sep = key.lastIndexOf('_')
+      const dateStr = key.slice(sep + 1)
+      if (key.slice(0, sep) !== String(vat) || !dateStr.startsWith(monthVal)) return
+      const entry = cardData[key]
+      if (entry.guessedStart || entry.guessedEnd) {
+        const missing = entry.guessedStart && entry.guessedEnd ? 'ώρα έναρξης & λήξης'
+          : entry.guessedStart ? 'ώρα έναρξης' : 'ώρα λήξης'
+        missingEntries.push({ dateStr, missing })
+      }
+    })
+    missingEntries.sort((a, b) => a.dateStr.localeCompare(b.dateStr))
+    if (missingEntries.length > 3) {
+      missingEntries.forEach((e) => {
+        violations.push({ sev: 'error', emp, date: e.dateStr, msg: `Λείπει ${e.missing}` })
+      })
       violations.push({
         sev: 'error',
         emp,
         date: monthVal,
-        msg: `${count} εγγραφές χωρίς ώρα αυτόν τον μήνα (μέγιστο 3)`,
+        msg: `${missingEntries.length} εγγραφές χωρίς ώρα αυτόν τον μήνα (μέγιστο 3)`,
       })
-    } else if (count > 0) {
-      violations.push({
-        sev: 'warn',
-        emp,
-        date: monthVal,
-        msg: `${count}/3 εγγραφές χωρίς ώρα αυτόν τον μήνα`,
+    } else if (missingEntries.length > 0) {
+      missingEntries.forEach((e) => {
+        violations.push({ sev: 'warn', emp, date: e.dateStr, msg: `Λείπει ${e.missing}` })
       })
+    }
+
+    // Rule 3: 11-hour rest gap between consecutive card entries
+    // Collect all card dates for this employee in the month, sorted
+    const empCardDates = Object.keys(cardData)
+      .filter((key) => {
+        const sep = key.lastIndexOf('_')
+        return key.slice(0, sep) === String(vat) && key.slice(sep + 1).startsWith(monthVal)
+      })
+      .map((key) => key.slice(key.lastIndexOf('_') + 1))
+      .sort()
+
+    for (const dateStr of empCardDates) {
+      const gapH = getGapToPrevCardEntry(vat, dateStr)
+      if (gapH !== null && gapH < 11) {
+        violations.push({
+          sev: 'error',
+          emp,
+          date: dateStr,
+          msg: `Ανάπαυση ${gapH.toFixed(1)} ωρών μεταξύ βαρδιών (ελάχιστο 11)`,
+        })
+      }
     }
   })
 

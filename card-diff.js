@@ -26,9 +26,35 @@ async function readCardFileRows(file) {
   const name = String(file.name || '').toLowerCase()
   if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
     const buf = await file.arrayBuffer()
-    const wb = XLSX.read(buf, { type: 'array' })
+    const wb = XLSX.read(buf, { type: 'array', cellDates: false })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';' })
+    // Get raw values to distinguish numbers from dates/times
+    const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true })
+    // Get formatted values for display (Excel-formatted dates/times)
+    const fmtRows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })
+    if (!rawRows.length) return []
+    // Use formatted values but fix time columns that come as raw fractions
+    const csv = rawRows.map((row, ri) => {
+      const fmtRow = fmtRows[ri] || []
+      return row.map((cell, ci) => {
+        if (cell == null) return ''
+        // Time fraction (0 < val < 1): format as HH:MM
+        if (typeof cell === 'number' && cell > 0 && cell < 1) {
+          const totalMin = Math.round(cell * 1440)
+          const h = Math.floor(totalMin / 60)
+          const m = totalMin % 60
+          return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0')
+        }
+        // Date serial (> 30000): format as D/M/YYYY
+        if (typeof cell === 'number' && cell > 30000 && cell < 100000) {
+          const epoch = new Date(1899, 11, 30)
+          const d = new Date(epoch.getTime() + cell * 86400000)
+          return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`
+        }
+        // Use formatted string for everything else
+        return String(fmtRow[ci] != null ? fmtRow[ci] : cell)
+      }).join(';')
+    }).join('\n')
     return parseCardFile(csv)
   }
   const text = await file.text()
@@ -56,44 +82,25 @@ function parseCardFile(text) {
   }
 
   const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ','
-  const headers = lines[0].split(delimiter).map((h) => h.trim().toLowerCase())
+  // Strip Greek accents for robust header matching
+  const _strip = (s) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const headers = lines[0].split(delimiter).map(_strip)
   const idx = {
-    employee: headers.findIndex((h) =>
-      [
-        'employee',
-        'name',
-        'employee_name',
-        'εργαζόμενος',
-        'ονομα',
-        'nick',
-        'nickname',
-        'vat',
-        'afm',
-        'αφμ',
-        'επώνυμο',
-        'επωνυμο',
-      ].includes(h),
-    ),
+    employee: (() => {
+      // Prefer VAT/AFM columns, fall back to name-based columns
+      const vatIdx = headers.findIndex((h) => ['vat', 'afm', 'αφμ'].includes(h))
+      if (vatIdx >= 0) return vatIdx
+      return headers.findIndex((h) =>
+        ['employee', 'name', 'employee_name', 'εργαζομενος', 'ονομα', 'nick', 'nickname', 'επωνυμο'].includes(h))
+    })(),
     date: headers.findIndex((h) =>
-      ['date', 'day', 'ημερομηνια', 'ημ/νια', 'ημ/νία', 'ημερομηνία'].includes(h),
+      ['date', 'day', 'ημερομηνια', 'ημ/νια', 'ημερομηνια'].includes(h),
     ),
     in: headers.findIndex((h) =>
-      ['in', 'checkin', 'clockin', 'εισοδος', 'είσοδος', 'start', 'από', 'απο', 'αρχή', 'αρχη'].includes(h),
+      ['in', 'checkin', 'clockin', 'εισοδος', 'start', 'απο', 'αρχη'].includes(h),
     ),
     out: headers.findIndex((h) =>
-      [
-        'out',
-        'checkout',
-        'clockout',
-        'εξοδος',
-        'έξοδος',
-        'end',
-        'έως',
-        'εως',
-        'τέλος',
-        'τελος',
-        'λήξη',
-      ].includes(h),
+      ['out', 'checkout', 'clockout', 'εξοδος', 'end', 'εως', 'τελος', 'ληξη'].includes(h),
     ),
   }
   if (idx.employee < 0 || idx.date < 0 || idx.in < 0 || idx.out < 0) {
@@ -103,19 +110,30 @@ function parseCardFile(text) {
   }
 
   const surnameIdx = headers.findIndex(
-    (h, i) => i !== idx.employee && ['επώνυμο', 'επωνυμο', 'surname', 'lastname', 'last_name'].includes(h),
+    (h, i) => i !== idx.employee && ['επωνυμο', 'surname', 'lastname', 'last_name'].includes(h),
   )
   const firstNameIdx = headers.findIndex(
-    (h, i) => i !== idx.employee && ['όνομα', 'ονομα', 'firstname', 'first_name'].includes(h),
+    (h, i) => i !== idx.employee && ['ονομα', 'firstname', 'first_name'].includes(h),
   )
+
+  // Normalize time string: strip seconds, handle "3:52 PM" etc.
+  const _normTime = (s) => {
+    const t = String(s || '').trim()
+    // HH:MM:SS → HH:MM
+    const m1 = t.match(/^(\d{1,2}:\d{2}):\d{2}$/)
+    if (m1) return m1[1]
+    // Already HH:MM
+    if (/^\d{1,2}:\d{2}$/.test(t)) return t
+    return t
+  }
 
   return lines.slice(1).map((ln) => {
     const c = ln.split(delimiter).map((x) => x.trim())
     return {
       employee: c[idx.employee] || '',
       date: c[idx.date] || '',
-      in: c[idx.in] || '',
-      out: c[idx.out] || '',
+      in: _normTime(c[idx.in]),
+      out: _normTime(c[idx.out]),
       surname: surnameIdx >= 0 ? c[surnameIdx] || '' : '',
       firstName: firstNameIdx >= 0 ? c[firstNameIdx] || '' : '',
     }

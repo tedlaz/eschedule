@@ -184,6 +184,17 @@
     }
     .card-missing-badge.exceeded { background: #ef4444; }
 
+    /* Missing-card correction bar (shown in card row position) */
+    .corr-bar-wrap { cursor: pointer; }
+    .corr-bar-wrap .bar { height: 16px; border-radius: 3px; }
+    .bar-corr-resolved { background: #dcfce7; display: flex; align-items: center; justify-content: center; }
+    .bar-corr-pending { background: repeating-linear-gradient(45deg,#fca5a5,#fca5a5 5px,#fecaca 5px,#fecaca 10px);
+                        display: flex; align-items: center; justify-content: center;
+                        animation: corr-pulse 1.5s ease-in-out infinite; }
+    @keyframes corr-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .corr-label { font-size: 10px; font-weight: 600; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+    .corr-selected .bar { outline: 2px solid #3b82f6; outline-offset: -1px; }
+
     /* ─── Overnight seamless bar across cells ────────────────────────── */
     .seg-spillover { cursor: pointer; }
     /* Remove padding + border on connecting edges so bars touch */
@@ -274,7 +285,6 @@
   <!-- ─── Toolbar ─────────────────────────────────────────────── -->
   <div class="toolbar">
     <!-- Left actions -->
-    <button class="btn-secondary" onclick="openEmployeeListModal()">👥 Εργαζόμενοι</button>
     <button class="btn-secondary" onclick="openScheduleModal()">📅 Πρόγραμμα</button>
     <button class="btn-secondary" onclick="openCardImportModal()">📁 Κάρτα</button>
     <button class="btn-secondary" onclick="openSummaryModal()">Σύνοψη</button>
@@ -439,17 +449,30 @@
         <input type="file" id="cardFileInput" accept=".csv,.txt,.xlsx,.xls"
                onchange="handleCardFileSelect(this)">
       </div>
+      <div class="form-group" style="margin-top:8px">
+        <label style="font-size:12px;color:#6b7280">Ανοχή σύγκρισης (λεπτά)</label>
+        <input type="number" id="corrToleranceInput" value="15" min="0" max="120"
+               style="width:70px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+      </div>
       <div id="cardImportStatus"></div>
+      <div style="border-top:1px solid #e5e7eb;margin-top:14px;padding-top:12px">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:8px;font-weight:600">Αποθηκευμένοι μήνες</p>
+        <div id="cardSavedMonthsList">
+          <span style="color:#9ca3af;font-size:12px">Δεν υπάρχουν αποθηκευμένοι μήνες.</span>
+        </div>
+      </div>
     </div>
 
     <!-- Save tab -->
     <div class="card-tab-panel" id="cardPanel-save">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
-        Εξαγωγή των δεδομένων κάρτας (μετά από τυχόν διορθώσεις) σε αρχείο CSV.<br>
-        Το αρχείο μπορεί να επανεισαχθεί από την καρτέλα Φόρτωση.
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+        Αποθήκευση δεδομένων κάρτας και διορθώσεων για τον τρέχοντα μήνα.
       </p>
       <div id="cardSaveStatus" style="font-size:12px;color:#6b7280;margin-bottom:12px;min-height:18px"></div>
-      <button class="btn-primary" onclick="exportCardData()">💾 Λήψη αρχείου XLSX</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="saveMonthlyCard()">💾 Αποθήκευση μήνα</button>
+        <button class="btn-secondary" onclick="exportCardData()">📥 Λήψη XLSX</button>
+      </div>
     </div>
 
     <!-- Check tab -->
@@ -492,6 +515,7 @@
       <button class="sched-tab-btn"        id="schedTab-save"  onclick="_schedTabSwitch('save')">💾 Αποθήκευση</button>
       <button class="sched-tab-btn"        id="schedTab-check" onclick="_schedTabSwitch('check')">🔍 Έλεγχος</button>
       <button class="sched-tab-btn"        id="schedTab-print" onclick="_schedTabSwitch('print')">🖨 Εκτύπωση</button>
+      <button class="sched-tab-btn"        id="schedTab-changes" onclick="_schedTabSwitch('changes')">📝 Αλλαγές</button>
     </div>
 
     <!-- Load tab -->
@@ -541,6 +565,31 @@
       </div>
     </div>
 
+    <!-- Changes tab -->
+    <div class="sched-tab-panel" id="schedPanel-changes">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+        Διαφορές μεταξύ προγράμματος και δεδομένων κάρτας.<br>
+        Εξαγωγή μόνο των αλλαγών (διορθώσεις χρόνων, νέες εγγραφές, άδειες).
+      </p>
+      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+        <div>
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Μήνας</label>
+          <input type="month" id="changesMonth" onchange="renderChangesPreview()"
+                 style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Ανοχή (λεπτά)</label>
+          <input type="number" id="changesTolerance" value="15" min="0" max="120"
+                 style="width:64px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+        <button class="btn-secondary" onclick="runComputeCorrections()">🔄 Υπολογισμός διαφορών</button>
+        <button class="btn-primary" onclick="exportChangesAsJson()">📝 Λήψη JSON αλλαγών</button>
+      </div>
+      <div id="schedChangesResults">
+        <p style="color:#9ca3af;font-size:13px">Φορτώστε δεδομένα κάρτας για να δείτε τις διαφορές.</p>
+      </div>
+    </div>
+
     <div class="modal-buttons" style="margin-top:16px">
       <button class="btn-secondary" onclick="closeModal('scheduleModal')">Κλείσιμο</button>
     </div>
@@ -573,6 +622,35 @@
     <div class="modal-buttons">
       <button class="btn-primary" onclick="saveCardTimeEdit()">Αποθήκευση</button>
       <button class="btn-secondary" onclick="closeModal('cardEditModal')">Άκυρο</button>
+    </div>
+  </div>
+</div>
+
+<!-- Correction modal (schedule vs card difference) -->
+<div class="modal" id="correctionModal">
+  <div class="modal-content" style="max-width:380px">
+    <h2 style="font-size:16px;margin-bottom:12px">Διόρθωση</h2>
+    <input type="hidden" id="corrVat">
+    <input type="hidden" id="corrDate">
+    <div style="font-size:13px;margin-bottom:10px">
+      <strong id="corrEmpName"></strong> &mdash; <span id="corrDateDisplay"></span>
+    </div>
+    <div id="corrInfo" style="font-size:12px;color:#374151;margin-bottom:14px;line-height:1.6"></div>
+    <div id="corrAbsenceFields">
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Τύπος</label>
+        <select id="corrAbsenceType" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="">-- Επιλέξτε --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Αιτιολογία (προαιρετικά)</label>
+        <input type="text" id="corrReason" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+    </div>
+    <div class="modal-buttons" style="margin-top:14px">
+      <button class="btn-primary" onclick="saveCorrection()">Αποθήκευση</button>
+      <button class="btn-secondary" onclick="closeModal('correctionModal')">Άκυρο</button>
     </div>
   </div>
 </div>

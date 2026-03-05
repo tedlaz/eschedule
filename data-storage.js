@@ -46,7 +46,7 @@ async function clearPersistedState() {
     const db = await idbOpen()
     await new Promise((resolve, reject) => {
       const tx = db.transaction(IDB_STORE, 'readwrite')
-      tx.objectStore(IDB_STORE).delete(IDB_KEY)
+      tx.objectStore(IDB_STORE).clear() // wipe ALL keys (state + card_* months)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
@@ -64,6 +64,13 @@ async function resetAllData() {
   currentWeekStart = getMonday(new Date())
   selectedCells = []
   isMultiSelectMode = false
+  // Clear card data, corrections, and correction selection
+  cardData = {}
+  cardVirtualEmployees = []
+  cardMissingTimeCount = {}
+  shiftCorrections = {}
+  selectedCorrCells = []
+  correctionTolerance = 15
   const btn = document.getElementById('multiSelectBtn')
   if (btn) {
     btn.classList.remove('btn-active')
