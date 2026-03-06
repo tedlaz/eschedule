@@ -168,9 +168,26 @@ async function openPayrollModal() {
 
 
 function normalizeCardDate(value) {
+  // Excel serial date number (e.g. 46055 → 2026-02-02)
+  if (typeof value === 'number' && value > 30000 && value < 100000) {
+    const d = new Date(Date.UTC(1899, 11, 30 + value))
+    const yy = d.getUTCFullYear()
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const dd = String(d.getUTCDate()).padStart(2, '0')
+    return `${yy}-${mm}-${dd}`
+  }
   const s = String(value || '').trim()
   if (!s) return ''
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  // Also handle stringified Excel serial numbers
+  if (/^\d{5}$/.test(s)) {
+    const num = Number(s)
+    const d = new Date(Date.UTC(1899, 11, 30 + num))
+    const yy = d.getUTCFullYear()
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const dd = String(d.getUTCDate()).padStart(2, '0')
+    return `${yy}-${mm}-${dd}`
+  }
   const m1 = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/)
   if (m1) {
     const dd = String(Number(m1[1])).padStart(2, '0')

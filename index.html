@@ -260,7 +260,7 @@
     .bar {
       position: relative;
       height: 20px;
-      border-radius: 3px;
+      border-radius: 6px;
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -277,17 +277,20 @@
     }
 
     .bar-me {
-      background: linear-gradient(135deg, #bfdbfe, #93c5fd);
+      background: #eff6ff;
+      border: 2px solid #60a5fa;
       justify-content: center;
     }
 
     .bar-paid {
-      background: linear-gradient(135deg, #bbf7d0, #4ade80);
+      background: #f0fdf4;
+      border: 2px solid #22c55e;
       justify-content: center;
     }
 
     .bar-unpaid {
-      background: linear-gradient(135deg, #fed7aa, #fb923c);
+      background: #fff7ed;
+      border: 2px solid #f97316;
       justify-content: center;
     }
 
@@ -322,15 +325,21 @@
     }
 
     .seg-work {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: #ede9fe;
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 2px #7c3aed;
     }
 
     .seg-tel {
-      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      background: #dbeafe;
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 2px #2563eb;
     }
 
     .seg-holiday {
-      background: linear-gradient(135deg, #fb923c, #ea580c);
+      background: #fff7ed;
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 2px #ea580c;
     }
 
     .seg-gap {
@@ -361,9 +370,9 @@
     .seg-lbl {
       font-size: 9px;
       font-weight: 700;
-      color: #fff;
+      color: #374151;
       white-space: nowrap;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+      text-shadow: none;
     }
 
     .gap-lbl {
@@ -376,7 +385,7 @@
     /* Card bar */
     .card-bar-wrap .bar {
       height: 16px;
-      border-radius: 3px;
+      border-radius: 6px;
       opacity: .85;
     }
 
@@ -432,7 +441,7 @@
 
     .corr-bar-wrap .bar {
       height: 16px;
-      border-radius: 3px;
+      border-radius: 6px;
     }
 
     .bar-corr-resolved {
@@ -495,11 +504,11 @@
 
     /* Flat edges on connecting sides */
     .bar-extends-right>.bar {
-      border-radius: 3px 0 0 3px;
+      border-radius: 6px 0 0 6px;
     }
 
     .bar-extends-left>.bar {
-      border-radius: 0 3px 3px 0;
+      border-radius: 0 6px 6px 0;
     }
 
     .bar-extends-left.bar-extends-right>.bar {

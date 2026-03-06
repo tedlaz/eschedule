@@ -94,8 +94,15 @@ async function importXlsxScheduleFile(file) {
   const occupAliases = ['απασχόληση', 'απασχοληση', 'occupation', 'shift', 'τύπος', 'τυπος']
 
   const findCol = (normRow, aliases) => {
+    // Exact match first
     for (const a of aliases) {
       if (a in normRow) return normRow[a]
+    }
+    // Partial match: column key contains alias (e.g. "παραρτ αφμ" contains "αφμ")
+    for (const a of aliases) {
+      for (const k of Object.keys(normRow)) {
+        if (k.includes(a)) return normRow[k]
+      }
     }
     return undefined
   }

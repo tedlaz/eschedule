@@ -2194,7 +2194,7 @@ function _emptyBuckets() {
   return b
 }
 
-function _classifyDayHours(employeeId, dateStr) {
+function _classifyDayHours(employeeId, dateStr, dailyContract) {
   const buckets = _emptyBuckets()
   const shift = data.shifts[`${employeeId}_${dateStr}`]
   if (!shift || !isWorkingType(shift)) return buckets
@@ -2204,6 +2204,7 @@ function _classifyDayHours(employeeId, dateStr) {
   const illegalThresh = getRule('dailyIllegalThreshold') || 11
   const nightStartMin = getRule('nightStartMinutes') || 1320
   const nightEndMin = getRule('nightEndMinutes') || 360
+  const withinThresh = dailyContract != null ? Math.min(dailyContract, yeThresh) : yeThresh
 
   // Day type: holiday > sunday > work
   const date = parseISODateLocal(dateStr)
@@ -2229,7 +2230,8 @@ function _classifyDayHours(employeeId, dateStr) {
       const timeType = tod >= nightStartMin || tod < nightEndMin ? 'night' : 'day'
       const h = cumulMin / 60
       let cat
-      if (h < yeThresh) cat = 'within'
+      if (h < withinThresh) cat = 'within'
+      else if (h < yeThresh) cat = 'additional'
       else if (h < ypThresh) cat = 'ye'
       else if (h < illegalThresh) cat = 'yp'
       else cat = 'illegal'
@@ -2301,14 +2303,17 @@ function _redistributeAdditional(buckets, contractHours) {
 }
 
 function _detailedWeekBuckets(employeeId, weekStart) {
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+  const weekContract = Number(emp?.weekWorkingHours ?? 40)
+  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
+  const dailyContract = weekContract / weekDays
   const totals = _emptyBuckets()
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
-    _aggregateBuckets(totals, _classifyDayHours(employeeId, formatDate(d)))
+    _aggregateBuckets(totals, _classifyDayHours(employeeId, formatDate(d), dailyContract))
   }
-  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  _redistributeAdditional(totals, Number(emp?.weekWorkingHours ?? 40))
+  _redistributeAdditional(totals, weekContract)
   return totals
 }
 
@@ -2320,6 +2325,8 @@ function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
 
   const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
   const weekContract = Number(emp?.weekWorkingHours ?? 40)
+  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
+  const dailyContract = weekContract / weekDays
 
   // Full week — use standard calculation
   if (!isFirstPartial && !isLastPartial) {
@@ -2342,7 +2349,7 @@ function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
 
   // Classify in-month days (raw, no redistribution)
   const inMonthBuckets = _emptyBuckets()
-  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyDayHours(employeeId, ds)))
+  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyDayHours(employeeId, ds, dailyContract)))
 
   // If no in-month working hours → contract = 0
   if (_bucketTotal(inMonthBuckets) === 0) {
@@ -2359,7 +2366,7 @@ function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
     // Effective contract: out-of-month within hours consumed part of the contract
     let outWithin = 0
     outMonthDays.forEach((ds) => {
-      const dayB = _classifyDayHours(employeeId, ds)
+      const dayB = _classifyDayHours(employeeId, ds, dailyContract)
       Object.keys(dayB).forEach((k) => {
         if (k.startsWith('within_')) outWithin += dayB[k]
       })
@@ -2395,7 +2402,7 @@ function _detailedMonthBuckets(employeeId, monthKey) {
 
 // ─── Card-based hour classification (mirrors schedule classification) ────
 
-function _classifyCardDayHours(employeeId, dateStr) {
+function _classifyCardDayHours(employeeId, dateStr, dailyContract) {
   const buckets = _emptyBuckets()
   const entry = cardData[`${employeeId}_${dateStr}`]
   if (!entry || !entry.start || !entry.end) return buckets
@@ -2405,6 +2412,7 @@ function _classifyCardDayHours(employeeId, dateStr) {
   const illegalThresh = getRule('dailyIllegalThreshold') || 11
   const nightStartMin = getRule('nightStartMinutes') || 1320
   const nightEndMin = getRule('nightEndMinutes') || 360
+  const withinThresh = dailyContract != null ? Math.min(dailyContract, yeThresh) : yeThresh
 
   const date = parseISODateLocal(dateStr)
   const dow = date.getDay()
@@ -2428,7 +2436,8 @@ function _classifyCardDayHours(employeeId, dateStr) {
       const timeType = tod >= nightStartMin || tod < nightEndMin ? 'night' : 'day'
       const h = cumulMin / 60
       let cat
-      if (h < yeThresh) cat = 'within'
+      if (h < withinThresh) cat = 'within'
+      else if (h < yeThresh) cat = 'additional'
       else if (h < ypThresh) cat = 'ye'
       else if (h < illegalThresh) cat = 'yp'
       else cat = 'illegal'
@@ -2445,16 +2454,19 @@ function _classifyCardDayHours(employeeId, dateStr) {
 }
 
 function _detailedWeekCardBuckets(employeeId, weekStart) {
+  const emp =
+    data.employees.find((e) => String(e.vat) === String(employeeId)) ||
+    cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
+  const weekContract = Number(emp?.weekWorkingHours ?? 40)
+  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
+  const dailyContract = weekContract / weekDays
   const totals = _emptyBuckets()
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
-    _aggregateBuckets(totals, _classifyCardDayHours(employeeId, formatDate(d)))
+    _aggregateBuckets(totals, _classifyCardDayHours(employeeId, formatDate(d), dailyContract))
   }
-  const emp =
-    data.employees.find((e) => String(e.vat) === String(employeeId)) ||
-    cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
-  _redistributeAdditional(totals, Number(emp?.weekWorkingHours ?? 40))
+  _redistributeAdditional(totals, weekContract)
   return totals
 }
 
@@ -2468,6 +2480,8 @@ function _monthWeekCardBuckets(employeeId, weekStart, monthFirstDay, monthLastDa
     data.employees.find((e) => String(e.vat) === String(employeeId)) ||
     cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
   const weekContract = Number(emp?.weekWorkingHours ?? 40)
+  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
+  const dailyContract = weekContract / weekDays
 
   if (!isFirstPartial && !isLastPartial) {
     return { buckets: _detailedWeekCardBuckets(employeeId, weekStart), contract: weekContract }
@@ -2487,7 +2501,7 @@ function _monthWeekCardBuckets(employeeId, weekStart, monthFirstDay, monthLastDa
   }
 
   const inMonthBuckets = _emptyBuckets()
-  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyCardDayHours(employeeId, ds)))
+  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyCardDayHours(employeeId, ds, dailyContract)))
 
   if (_bucketTotal(inMonthBuckets) === 0) {
     return { buckets: inMonthBuckets, contract: 0 }
@@ -2502,7 +2516,7 @@ function _monthWeekCardBuckets(employeeId, weekStart, monthFirstDay, monthLastDa
   if (hasOutMonthData) {
     let outWithin = 0
     outMonthDays.forEach((ds) => {
-      const dayB = _classifyCardDayHours(employeeId, ds)
+      const dayB = _classifyCardDayHours(employeeId, ds, dailyContract)
       Object.keys(dayB).forEach((k) => {
         if (k.startsWith('within_')) outWithin += dayB[k]
       })
