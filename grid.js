@@ -2130,7 +2130,7 @@ function _renderCardCheckResults(violations) {
 
 // ─── Summary modal ───────────────────────────────────────────────────────
 
-let _summaryViewMode = 'week'
+let _summaryViewMode = 'schedule'
 
 function openSummaryModal() {
   const input = document.getElementById('summaryMonth')
@@ -2143,8 +2143,8 @@ function openSummaryModal() {
 
 function renderSummary(viewMode) {
   if (viewMode) _summaryViewMode = viewMode
-  const modes = ['week', 'month', 'cardWeek', 'cardMonth']
-  const btnIds = ['summaryViewWeek', 'summaryViewMonth', 'summaryViewCardWeek', 'summaryViewCardMonth']
+  const modes = ['schedule', 'card']
+  const btnIds = ['summaryViewSchedule', 'summaryViewCard']
   modes.forEach((m, i) => {
     const btn = document.getElementById(btnIds[i])
     if (btn) btn.style.fontWeight = _summaryViewMode === m ? '700' : '400'
@@ -2157,7 +2157,7 @@ function renderSummary(viewMode) {
     return
   }
 
-  const isCard = _summaryViewMode === 'cardWeek' || _summaryViewMode === 'cardMonth'
+  const isCard = _summaryViewMode === 'card'
   if (!isCard && !data.employees.length) {
     out.innerHTML = '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
     return
@@ -2167,13 +2167,7 @@ function renderSummary(viewMode) {
     return
   }
 
-  const renderers = {
-    week: _renderWeekSummary,
-    month: _renderMonthSummary,
-    cardWeek: _renderWeekCardSummary,
-    cardMonth: _renderMonthCardSummary,
-  }
-  out.innerHTML = renderers[_summaryViewMode](monthVal)
+  out.innerHTML = _renderFoldingSummary(monthVal, isCard)
 }
 
 // ─── Detailed hour classification (30 buckets) ──────────────────────────
@@ -2194,7 +2188,7 @@ function _emptyBuckets() {
   return b
 }
 
-function _classifyDayHours(employeeId, dateStr, dailyContract) {
+function _classifyDayHours(employeeId, dateStr, withinLimit, isFullTime) {
   const buckets = _emptyBuckets()
   const shift = data.shifts[`${employeeId}_${dateStr}`]
   if (!shift || !isWorkingType(shift)) return buckets
@@ -2204,7 +2198,7 @@ function _classifyDayHours(employeeId, dateStr, dailyContract) {
   const illegalThresh = getRule('dailyIllegalThreshold') || 11
   const nightStartMin = getRule('nightStartMinutes') || 1320
   const nightEndMin = getRule('nightEndMinutes') || 360
-  const withinThresh = dailyContract != null ? Math.min(dailyContract, yeThresh) : yeThresh
+  const withinThresh = withinLimit != null ? Math.min(withinLimit, yeThresh) : yeThresh
 
   // Day type: holiday > sunday > work
   const date = parseISODateLocal(dateStr)
@@ -2231,7 +2225,7 @@ function _classifyDayHours(employeeId, dateStr, dailyContract) {
       const h = cumulMin / 60
       let cat
       if (h < withinThresh) cat = 'within'
-      else if (h < yeThresh) cat = 'additional'
+      else if (h < yeThresh) cat = isFullTime ? 'ye' : 'additional'
       else if (h < ypThresh) cat = 'ye'
       else if (h < illegalThresh) cat = 'yp'
       else cat = 'illegal'
@@ -2264,123 +2258,86 @@ function _bucketTotal(b) {
 }
 
 // Redistribute excess "within" hours to "additional" based on contract.
-// At the daily level all hours up to 8h are classified as "within".
-// This function moves the weekly/monthly excess beyond contractHours
-// from "within" to "additional" using priority fill: normal workday/day
-// hours fill Εντός first; night, holiday, sunday hours overflow last.
-function _redistributeAdditional(buckets, contractHours) {
-  // Fill order: most "normal" hours stay in Εντός first
-  const fillOrder = [
-    'within_work_day',
-    'within_work_night',
-    'within_holiday_day',
-    'within_holiday_night',
-    'within_sunday_day',
-    'within_sunday_night',
-  ]
-  let totalWithin = 0
-  fillOrder.forEach((k) => {
-    totalWithin += buckets[k] || 0
-  })
-  totalWithin = Math.round(totalWithin * 100) / 100
-
-  if (totalWithin <= contractHours || totalWithin === 0) return buckets
-
-  let remaining = Math.round(contractHours * 100) / 100
-  fillOrder.forEach((wk) => {
-    const val = buckets[wk] || 0
-    if (remaining >= val) {
-      remaining = Math.round((remaining - val) * 100) / 100
-    } else {
-      const overflow = Math.round((val - remaining) * 100) / 100
-      buckets[wk] = Math.round(remaining * 100) / 100
-      const ak = wk.replace('within_', 'additional_')
-      buckets[ak] = Math.round(((buckets[ak] || 0) + overflow) * 100) / 100
-      remaining = 0
-    }
-  })
-  return buckets
-}
-
-function _detailedWeekBuckets(employeeId, weekStart) {
-  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
+// Round-robin: classify each day Mon→Sun, tracking remaining weekly contract.
+// Working days use dailyContract as within threshold.
+// Rest days use whatever contract remains (capped at yeThresh).
+// Returns array of { dateStr, buckets } for all 7 days.
+function _roundRobinWeek(employeeId, weekStart, classifyFn) {
+  const emp = data.employees.find((e) => String(e.vat) === String(employeeId)) ||
+    (typeof cardVirtualEmployees !== 'undefined' ? cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId)) : null)
   const weekContract = Number(emp?.weekWorkingHours ?? 40)
   const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
-  const dailyContract = weekContract / weekDays
-  const totals = _emptyBuckets()
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
-    _aggregateBuckets(totals, _classifyDayHours(employeeId, formatDate(d), dailyContract))
-  }
-  _redistributeAdditional(totals, weekContract)
-  return totals
-}
+  const dailyContract = Math.round(weekContract / weekDays)
+  const isFullTime = weekContract >= 40
+  const restDays = getRestDaysForEmployee(employeeId)
+  const yeThresh = getRule('dailyYeThreshold') || 8
 
-function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekEnd.getDate() + 6)
-  const isFirstPartial = weekStart < monthFirstDay
-  const isLastPartial = weekEnd > monthLastDay
+  let remaining = weekContract
+  const days = []
 
-  const emp = data.employees.find((e) => String(e.vat) === String(employeeId))
-  const weekContract = Number(emp?.weekWorkingHours ?? 40)
-  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
-  const dailyContract = weekContract / weekDays
-
-  // Full week — use standard calculation
-  if (!isFirstPartial && !isLastPartial) {
-    return { buckets: _detailedWeekBuckets(employeeId, weekStart), contract: weekContract }
-  }
-
-  // Separate days into in-month and out-of-month
-  const inMonthDays = []
-  const outMonthDays = []
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
     const ds = formatDate(d)
-    if (d >= monthFirstDay && d <= monthLastDay) {
-      inMonthDays.push(ds)
-    } else {
-      outMonthDays.push(ds)
-    }
+    const dow = (d.getDay() + 6) % 7 // Mon=0..Sun=6
+    const isRest = restDays.includes(dow)
+
+    // Working day: fixed dailyContract; Rest day: whatever contract remains
+    const withinLimit = isRest
+      ? Math.max(Math.min(remaining, yeThresh), 0)
+      : dailyContract
+
+    const buckets = classifyFn(employeeId, ds, withinLimit, isFullTime)
+
+    // Deduct "within" hours consumed from remaining contract
+    let dayWithin = 0
+    Object.keys(buckets).forEach((k) => { if (k.startsWith('within_')) dayWithin += buckets[k] })
+    remaining = Math.round((remaining - dayWithin) * 100) / 100
+
+    days.push({ dateStr: ds, buckets })
   }
 
-  // Classify in-month days (raw, no redistribution)
-  const inMonthBuckets = _emptyBuckets()
-  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyDayHours(employeeId, ds, dailyContract)))
+  return { days, weekContract }
+}
 
-  // If no in-month working hours → contract = 0
+function _detailedWeekBuckets(employeeId, weekStart) {
+  const { days } = _roundRobinWeek(employeeId, weekStart, _classifyDayHours)
+  const totals = _emptyBuckets()
+  days.forEach((d) => _aggregateBuckets(totals, d.buckets))
+  return totals
+}
+
+function _monthWeekBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
+  const { days, weekContract } = _roundRobinWeek(employeeId, weekStart, _classifyDayHours)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const isFullWeek = weekStart >= monthFirstDay && weekEnd <= monthLastDay
+
+  if (isFullWeek) {
+    const totals = _emptyBuckets()
+    days.forEach((d) => _aggregateBuckets(totals, d.buckets))
+    return { buckets: totals, contract: weekContract }
+  }
+
+  // Partial week: only count in-month days, compute effective contract
+  const inMonthBuckets = _emptyBuckets()
+  let outWithin = 0
+  days.forEach((d) => {
+    const dt = parseISODateLocal(d.dateStr)
+    if (dt >= monthFirstDay && dt <= monthLastDay) {
+      _aggregateBuckets(inMonthBuckets, d.buckets)
+    } else {
+      Object.keys(d.buckets).forEach((k) => { if (k.startsWith('within_')) outWithin += d.buckets[k] })
+    }
+  })
+
   if (_bucketTotal(inMonthBuckets) === 0) {
     return { buckets: inMonthBuckets, contract: 0 }
   }
 
-  // Partial week (first or last) — check out-of-month shifts for effective contract
-  let hasOutMonthSchedule = false
-  outMonthDays.forEach((ds) => {
-    if (data.shifts[`${employeeId}_${ds}`]) hasOutMonthSchedule = true
-  })
-
-  if (hasOutMonthSchedule) {
-    // Effective contract: out-of-month within hours consumed part of the contract
-    let outWithin = 0
-    outMonthDays.forEach((ds) => {
-      const dayB = _classifyDayHours(employeeId, ds, dailyContract)
-      Object.keys(dayB).forEach((k) => {
-        if (k.startsWith('within_')) outWithin += dayB[k]
-      })
-    })
-    outWithin = Math.round(outWithin * 100) / 100
-    const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
-    _redistributeAdditional(inMonthBuckets, effectiveContract)
-    return { buckets: inMonthBuckets, contract: effectiveContract }
-  }
-
-  // No schedule on out-of-month days: proportional contract
-  const propContract = Math.round(((weekContract * inMonthDays.length) / 7) * 100) / 100
-  _redistributeAdditional(inMonthBuckets, propContract)
-  return { buckets: inMonthBuckets, contract: propContract }
+  outWithin = Math.round(outWithin * 100) / 100
+  const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
+  return { buckets: inMonthBuckets, contract: effectiveContract }
 }
 
 function _detailedMonthBuckets(employeeId, monthKey) {
@@ -2402,7 +2359,7 @@ function _detailedMonthBuckets(employeeId, monthKey) {
 
 // ─── Card-based hour classification (mirrors schedule classification) ────
 
-function _classifyCardDayHours(employeeId, dateStr, dailyContract) {
+function _classifyCardDayHours(employeeId, dateStr, withinLimit, isFullTime) {
   const buckets = _emptyBuckets()
   const entry = cardData[`${employeeId}_${dateStr}`]
   if (!entry || !entry.start || !entry.end) return buckets
@@ -2412,7 +2369,7 @@ function _classifyCardDayHours(employeeId, dateStr, dailyContract) {
   const illegalThresh = getRule('dailyIllegalThreshold') || 11
   const nightStartMin = getRule('nightStartMinutes') || 1320
   const nightEndMin = getRule('nightEndMinutes') || 360
-  const withinThresh = dailyContract != null ? Math.min(dailyContract, yeThresh) : yeThresh
+  const withinThresh = withinLimit != null ? Math.min(withinLimit, yeThresh) : yeThresh
 
   const date = parseISODateLocal(dateStr)
   const dow = date.getDay()
@@ -2437,7 +2394,7 @@ function _classifyCardDayHours(employeeId, dateStr, dailyContract) {
       const h = cumulMin / 60
       let cat
       if (h < withinThresh) cat = 'within'
-      else if (h < yeThresh) cat = 'additional'
+      else if (h < yeThresh) cat = isFullTime ? 'ye' : 'additional'
       else if (h < ypThresh) cat = 'ye'
       else if (h < illegalThresh) cat = 'yp'
       else cat = 'illegal'
@@ -2454,229 +2411,51 @@ function _classifyCardDayHours(employeeId, dateStr, dailyContract) {
 }
 
 function _detailedWeekCardBuckets(employeeId, weekStart) {
-  const emp =
-    data.employees.find((e) => String(e.vat) === String(employeeId)) ||
-    cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
-  const weekContract = Number(emp?.weekWorkingHours ?? 40)
-  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
-  const dailyContract = weekContract / weekDays
+  const { days } = _roundRobinWeek(employeeId, weekStart, _classifyCardDayHours)
   const totals = _emptyBuckets()
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
-    _aggregateBuckets(totals, _classifyCardDayHours(employeeId, formatDate(d), dailyContract))
-  }
-  _redistributeAdditional(totals, weekContract)
+  days.forEach((d) => _aggregateBuckets(totals, d.buckets))
   return totals
 }
 
 function _monthWeekCardBuckets(employeeId, weekStart, monthFirstDay, monthLastDay) {
+  const { days, weekContract } = _roundRobinWeek(employeeId, weekStart, _classifyCardDayHours)
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 6)
-  const isFirstPartial = weekStart < monthFirstDay
-  const isLastPartial = weekEnd > monthLastDay
+  const isFullWeek = weekStart >= monthFirstDay && weekEnd <= monthLastDay
 
-  const emp =
-    data.employees.find((e) => String(e.vat) === String(employeeId)) ||
-    cardVirtualEmployees.find((e) => String(e.vat) === String(employeeId))
-  const weekContract = Number(emp?.weekWorkingHours ?? 40)
-  const weekDays = Number(emp?.weekWorkingDays ?? 5) || 5
-  const dailyContract = weekContract / weekDays
-
-  if (!isFirstPartial && !isLastPartial) {
-    return { buckets: _detailedWeekCardBuckets(employeeId, weekStart), contract: weekContract }
-  }
-
-  const inMonthDays = []
-  const outMonthDays = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
-    const ds = formatDate(d)
-    if (d >= monthFirstDay && d <= monthLastDay) {
-      inMonthDays.push(ds)
-    } else {
-      outMonthDays.push(ds)
-    }
+  if (isFullWeek) {
+    const totals = _emptyBuckets()
+    days.forEach((d) => _aggregateBuckets(totals, d.buckets))
+    return { buckets: totals, contract: weekContract }
   }
 
   const inMonthBuckets = _emptyBuckets()
-  inMonthDays.forEach((ds) => _aggregateBuckets(inMonthBuckets, _classifyCardDayHours(employeeId, ds, dailyContract)))
+  let outWithin = 0
+  days.forEach((d) => {
+    const dt = parseISODateLocal(d.dateStr)
+    if (dt >= monthFirstDay && dt <= monthLastDay) {
+      _aggregateBuckets(inMonthBuckets, d.buckets)
+    } else {
+      Object.keys(d.buckets).forEach((k) => { if (k.startsWith('within_')) outWithin += d.buckets[k] })
+    }
+  })
 
   if (_bucketTotal(inMonthBuckets) === 0) {
     return { buckets: inMonthBuckets, contract: 0 }
   }
 
-  // Check out-of-month card entries for effective contract
-  let hasOutMonthData = false
-  outMonthDays.forEach((ds) => {
-    if (cardData[`${employeeId}_${ds}`]) hasOutMonthData = true
-  })
-
-  if (hasOutMonthData) {
-    let outWithin = 0
-    outMonthDays.forEach((ds) => {
-      const dayB = _classifyCardDayHours(employeeId, ds, dailyContract)
-      Object.keys(dayB).forEach((k) => {
-        if (k.startsWith('within_')) outWithin += dayB[k]
-      })
-    })
-    outWithin = Math.round(outWithin * 100) / 100
-    const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
-    _redistributeAdditional(inMonthBuckets, effectiveContract)
-    return { buckets: inMonthBuckets, contract: effectiveContract }
-  }
-
-  const propContract = Math.round(((weekContract * inMonthDays.length) / 7) * 100) / 100
-  _redistributeAdditional(inMonthBuckets, propContract)
-  return { buckets: inMonthBuckets, contract: propContract }
+  outWithin = Math.round(outWithin * 100) / 100
+  const effectiveContract = Math.max(0, Math.round((weekContract - outWithin) * 100) / 100)
+  return { buckets: inMonthBuckets, contract: effectiveContract }
 }
 
 // ─── Summary table rendering ─────────────────────────────────────────────
 const _thS =
   'padding:3px 2px;font-size:10px;text-align:center;color:#fff;border:1px solid rgba(255,255,255,0.25);white-space:nowrap'
-const _thBg = 'background:#6366f1'
-
-function _summaryTableHead() {
-  const catLabels = ['Εντός', 'Πρόσθετη', 'Υπερεργασία', 'Υπερωρίες', 'Παράνομες']
-  const dayLabels = ['Εργ.', 'Αργία', 'Κυρ.']
-
-  let r1 = `<th rowspan="3" style="${_thS};${_thBg};text-align:left;min-width:100px;position:sticky;left:0;z-index:2">Εργαζόμενος</th>`
-  r1 += `<th rowspan="3" style="${_thS};${_thBg};min-width:34px" title="Συμβατικές ώρες">Σύμβ.</th>`
-  r1 += `<th rowspan="3" style="${_thS};${_thBg};min-width:34px" title="Σύνολο ωρών">Σύν.</th>`
-  let r2 = '',
-    r3 = ''
-  catLabels.forEach((c) => {
-    r1 += `<th colspan="6" style="${_thS};${_thBg}">${c}</th>`
-    dayLabels.forEach((d) => {
-      r2 += `<th colspan="2" style="${_thS};${_thBg}">${d}</th>`
-      r3 += `<th style="${_thS};${_thBg}">Ημ.</th><th style="${_thS};${_thBg}">Νυχ.</th>`
-    })
-  })
-  return `<thead><tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr></thead>`
-}
 
 function _fmtV(v) {
   if (!v) return ''
   return v % 1 === 0 ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
-}
-
-function _summaryRow(label, buckets, bold, contractHours) {
-  const fw = bold ? 'font-weight:700;' : ''
-  const bg = bold ? '#eef2ff' : '#fff'
-  const tdS = `text-align:center;padding:2px 3px;font-size:11px;border:1px solid #e5e7eb;${fw}`
-  let html = `<td style="${tdS};text-align:left;white-space:nowrap;position:sticky;left:0;z-index:1;background:${bg}">${label}</td>`
-  html += `<td style="${tdS};background:${bg}">${_fmtV(contractHours)}</td>`
-  html += `<td style="${tdS};font-weight:700;background:${bg}">${_fmtV(_bucketTotal(buckets))}</td>`
-  _H_CATS.forEach((c) => {
-    _D_TYPES.forEach((d) => {
-      _T_TYPES.forEach((t) => {
-        html += `<td style="${tdS};background:${bg}">${_fmtV(buckets[`${c}_${d}_${t}`])}</td>`
-      })
-    })
-  })
-  return `<tr>${html}</tr>`
-}
-
-function _renderMonthSummary(monthVal) {
-  const [year, month] = monthVal.split('-').map(Number)
-  const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-
-  // Collect unique week starts
-  const weekStarts = []
-  const seen = new Set()
-  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-    const mon = getMonday(new Date(d))
-    const key = formatDate(mon)
-    if (!seen.has(key)) {
-      seen.add(key)
-      weekStarts.push(mon)
-    }
-  }
-
-  const grandTotals = _emptyBuckets()
-  let totalContract = 0
-  let rows = ''
-  data.employees.forEach((emp) => {
-    const empBuckets = _emptyBuckets()
-    let empContract = 0
-    weekStarts.forEach((ws) => {
-      const { buckets, contract } = _monthWeekBuckets(emp.vat, ws, firstDay, lastDay)
-      _aggregateBuckets(empBuckets, buckets)
-      empContract += contract
-    })
-    empContract = Math.round(empContract * 100) / 100
-    rows += _summaryRow(employeeLabel(emp), empBuckets, false, empContract)
-    _aggregateBuckets(grandTotals, empBuckets)
-    totalContract += empContract
-  })
-  return `<table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
-    ${_summaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table>`
-}
-
-function _renderWeekSummary(monthVal) {
-  const [year, month] = monthVal.split('-').map(Number)
-  const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-
-  const weekStarts = []
-  const seen = new Set()
-  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-    const mon = getMonday(new Date(d))
-    const key = formatDate(mon)
-    if (!seen.has(key)) {
-      seen.add(key)
-      weekStarts.push(mon)
-    }
-  }
-
-  let html = ''
-  weekStarts.forEach((ws) => {
-    const wEnd = new Date(ws)
-    wEnd.setDate(wEnd.getDate() + 6)
-    // Show in-month date range for boundary weeks
-    const rangeStart = ws < firstDay ? firstDay : ws
-    const rangeEnd = wEnd > lastDay ? lastDay : wEnd
-    const label = `${formatDate(rangeStart).slice(5)} — ${formatDate(rangeEnd).slice(5)}`
-    const grandTotals = _emptyBuckets()
-    let totalContract = 0
-    let rows = ''
-    data.employees.forEach((emp) => {
-      const { buckets, contract } = _monthWeekBuckets(emp.vat, ws, firstDay, lastDay)
-      rows += _summaryRow(employeeLabel(emp), buckets, false, contract)
-      _aggregateBuckets(grandTotals, buckets)
-      totalContract += contract
-    })
-    html += `<div style="margin-bottom:18px">
-      <div style="font-weight:600;font-size:13px;color:#374151;margin-bottom:4px">Εβδ. ${label}</div>
-      <table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
-        ${_summaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table></div>`
-  })
-  return html || '<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν δεδομένα.</p>'
-}
-
-// ─── Card summary rendering ─────────────────────────────────────────────
-
-const _thCardBg = 'background:#b45309'
-
-function _cardSummaryTableHead() {
-  const catLabels = ['Εντός', 'Πρόσθετη', 'Υπερεργασία', 'Υπερωρίες', 'Παράνομες']
-  const dayLabels = ['Εργ.', 'Αργία', 'Κυρ.']
-
-  let r1 = `<th rowspan="3" style="${_thS};${_thCardBg};text-align:left;min-width:100px;position:sticky;left:0;z-index:2">Εργαζόμενος</th>`
-  r1 += `<th rowspan="3" style="${_thS};${_thCardBg};min-width:34px" title="Συμβατικές ώρες">Σύμβ.</th>`
-  r1 += `<th rowspan="3" style="${_thS};${_thCardBg};min-width:34px" title="Σύνολο ωρών">Σύν.</th>`
-  let r2 = '',
-    r3 = ''
-  catLabels.forEach((c) => {
-    r1 += `<th colspan="6" style="${_thS};${_thCardBg}">${c}</th>`
-    dayLabels.forEach((d) => {
-      r2 += `<th colspan="2" style="${_thS};${_thCardBg}">${d}</th>`
-      r3 += `<th style="${_thS};${_thCardBg}">Ημ.</th><th style="${_thS};${_thCardBg}">Νυχ.</th>`
-    })
-  })
-  return `<thead><tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr></thead>`
 }
 
 function _allCardEmployees() {
@@ -2688,46 +2467,174 @@ function _allCardEmployees() {
   return [...byVat.values()]
 }
 
-function _renderMonthCardSummary(monthVal) {
-  const [year, month] = monthVal.split('-').map(Number)
-  const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-
-  const weekStarts = []
-  const seen = new Set()
-  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-    const mon = getMonday(new Date(d))
-    const key = formatDate(mon)
-    if (!seen.has(key)) {
-      seen.add(key)
-      weekStarts.push(mon)
-    }
-  }
-
-  const allEmps = _allCardEmployees()
-  if (!allEmps.length) return '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
-
-  const grandTotals = _emptyBuckets()
-  let totalContract = 0
-  let rows = ''
-  allEmps.forEach((emp) => {
-    const empBuckets = _emptyBuckets()
-    let empContract = 0
-    weekStarts.forEach((ws) => {
-      const { buckets, contract } = _monthWeekCardBuckets(emp.vat, ws, firstDay, lastDay)
-      _aggregateBuckets(empBuckets, buckets)
-      empContract += contract
+// Build the 3-row column header for the bucket table
+function _buildTableHead(thBg) {
+  const catLabels = ['Εντός', 'Πρόσθετη', 'Υπερεργασία', 'Υπερωρίες', 'Παράνομες']
+  const dayLabels = ['Εργ.', 'Αργία', 'Κυρ.']
+  let r1 = `<th rowspan="3" style="${_thS};${thBg};text-align:left;min-width:80px;position:sticky;left:0;z-index:2"></th>`
+  r1 += `<th rowspan="3" style="${_thS};${thBg};min-width:34px" title="Συμβατικές ώρες">Σύμβ.</th>`
+  r1 += `<th rowspan="3" style="${_thS};${thBg};min-width:34px" title="Σύνολο ωρών">Σύν.</th>`
+  let r2 = '', r3 = ''
+  catLabels.forEach((c) => {
+    r1 += `<th colspan="6" style="${_thS};${thBg}">${c}</th>`
+    dayLabels.forEach((d) => {
+      r2 += `<th colspan="2" style="${_thS};${thBg}">${d}</th>`
+      r3 += `<th style="${_thS};${thBg}">Ημ.</th><th style="${_thS};${thBg}">Νυχ.</th>`
     })
-    empContract = Math.round(empContract * 100) / 100
-    rows += _summaryRow(employeeLabel(emp), empBuckets, false, empContract)
-    _aggregateBuckets(grandTotals, empBuckets)
-    totalContract += empContract
   })
-  return `<table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
-    ${_cardSummaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table>`
+  return `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`
 }
 
-function _renderWeekCardSummary(monthVal) {
+// Render a data row (no toggle behavior)
+function _bucketCells(buckets, contractHours, style) {
+  const tdS = `text-align:center;padding:2px 3px;font-size:11px;border:1px solid #e5e7eb;${style}`
+  let html = `<td style="${tdS}">${_fmtV(contractHours)}</td>`
+  html += `<td style="${tdS};font-weight:700">${_fmtV(_bucketTotal(buckets))}</td>`
+  _H_CATS.forEach((c) => {
+    _D_TYPES.forEach((d) => {
+      _T_TYPES.forEach((t) => {
+        html += `<td style="${tdS}">${_fmtV(buckets[`${c}_${d}_${t}`])}</td>`
+      })
+    })
+  })
+  return html
+}
+
+let _foldId = 0
+
+function _renderFoldingSummary(monthVal, isCard) {
+  _foldId = 0
+  const [year, month] = monthVal.split('-').map(Number)
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
+  const thBg = isCard ? 'background:#b45309' : 'background:#6366f1'
+
+  // Collect unique week starts
+  const weekStarts = []
+  const seen = new Set()
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const mon = getMonday(new Date(d))
+    const key = formatDate(mon)
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
+  }
+
+  const employees = isCard ? _allCardEmployees() : [...data.employees]
+  if (!employees.length) return '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
+
+  const classifyDay = isCard ? _classifyCardDayHours : _classifyDayHours
+
+  const grandBuckets = _emptyBuckets()
+  let grandContract = 0
+  let bodyHtml = ''
+
+  employees.forEach((emp) => {
+    const empId = String(emp.vat)
+
+    // Gather per-employee month totals + per-week + per-day data
+    const empBuckets = _emptyBuckets()
+    let empContract = 0
+    const weekRows = []
+
+    weekStarts.forEach((ws) => {
+      const wEnd = new Date(ws)
+      wEnd.setDate(wEnd.getDate() + 6)
+      const rangeStart = ws < firstDay ? firstDay : ws
+      const rangeEnd = wEnd > lastDay ? lastDay : wEnd
+      const wLabel = `${formatDate(rangeStart).slice(5)} — ${formatDate(rangeEnd).slice(5)}`
+
+      // Use round-robin for consistent daily + weekly data
+      const { days, weekContract: wkContract } = _roundRobinWeek(empId, ws, classifyDay)
+
+      // Aggregate in-month days for week totals; track out-of-month within for contract
+      const wBuckets = _emptyBuckets()
+      let outWithin = 0
+      const dayRows = []
+      days.forEach((d) => {
+        const dt = parseISODateLocal(d.dateStr)
+        if (dt < firstDay || dt > lastDay) {
+          Object.keys(d.buckets).forEach((k) => { if (k.startsWith('within_')) outWithin += d.buckets[k] })
+          return
+        }
+        _aggregateBuckets(wBuckets, d.buckets)
+        if (_bucketTotal(d.buckets) === 0) return
+        const dow = (dt.getDay() + 6) % 7
+        const entry = isCard ? cardData[`${empId}_${d.dateStr}`] : data.shifts[`${empId}_${d.dateStr}`]
+        let timeRange = ''
+        if (entry && entry.start && entry.end) {
+          timeRange = ` (${entry.start}-${entry.end})`
+          if (entry.start2 && entry.end2) timeRange = ` (${entry.start}-${entry.end}, ${entry.start2}-${entry.end2})`
+        }
+        const dayLabel = `${DAY_ABBREV[dow]} ${d.dateStr.slice(8)}/${d.dateStr.slice(5, 7)}${timeRange}`
+        dayRows.push({ label: dayLabel, buckets: d.buckets })
+      })
+
+      outWithin = Math.round(outWithin * 100) / 100
+      const wContract = _bucketTotal(wBuckets) === 0 ? 0 : Math.max(0, Math.round((wkContract - outWithin) * 100) / 100)
+      _aggregateBuckets(empBuckets, wBuckets)
+      empContract += wContract
+
+      weekRows.push({ label: wLabel, buckets: wBuckets, contract: wContract, dayRows })
+    })
+
+    empContract = Math.round(empContract * 100) / 100
+    _aggregateBuckets(grandBuckets, empBuckets)
+    grandContract += empContract
+
+    // Build employee folding rows
+    const empFoldId = `sf_${_foldId++}`
+    const empLabel = employeeLabel(emp)
+    const empColor = isCard ? '#92400e' : '#4338ca'
+    const empBg = isCard ? '#fffbeb' : '#eef2ff'
+
+    // Level 1: Employee month total (always visible, toggles only week rows)
+    bodyHtml += `<tr class="summary-emp" style="cursor:pointer;background:${empBg}" onclick="document.querySelectorAll('.${empFoldId}_wk').forEach(r=>{r.style.display=r.style.display==='none'?'':'none'});var closing=this.querySelector('.sf-arrow').textContent==='\\u25BC';if(closing){document.querySelectorAll('.${empFoldId}_dy').forEach(r=>{r.style.display='none'});document.querySelectorAll('.${empFoldId}_wk .sf-arrow').forEach(a=>{a.textContent='\\u25B6'})}this.querySelector('.sf-arrow').textContent=closing?'\\u25B6':'\\u25BC'">`
+    bodyHtml += `<td style="text-align:left;padding:3px 4px;font-size:12px;font-weight:700;border:1px solid #e5e7eb;white-space:nowrap;position:sticky;left:0;z-index:1;background:${empBg};color:${empColor}"><span class="sf-arrow" style="font-size:9px;margin-right:4px;display:inline-block;width:10px">&#x25B6;</span>${empLabel}</td>`
+    bodyHtml += _bucketCells(empBuckets, empContract, `font-weight:600;background:${empBg}`)
+    bodyHtml += '</tr>'
+
+    // Level 2: Week rows (hidden by default, each toggles day rows)
+    weekRows.forEach((wr) => {
+      const wkFoldId = `sf_${_foldId++}`
+      bodyHtml += `<tr class="${empFoldId}_wk" style="display:none;cursor:pointer;background:#f9fafb" onclick="event.stopPropagation();document.querySelectorAll('.${wkFoldId}').forEach(r=>{r.style.display=r.style.display==='none'?'':'none'});this.querySelector('.sf-arrow').textContent=this.querySelector('.sf-arrow').textContent==='\\u25B6'?'\\u25BC':'\\u25B6'">`
+      bodyHtml += `<td style="text-align:left;padding:2px 4px 2px 20px;font-size:11px;font-weight:600;border:1px solid #e5e7eb;white-space:nowrap;position:sticky;left:0;z-index:1;background:#f9fafb;color:#374151"><span class="sf-arrow" style="font-size:8px;margin-right:3px;display:inline-block;width:10px">&#x25B6;</span>${wr.label}</td>`
+      bodyHtml += _bucketCells(wr.buckets, wr.contract, 'background:#f9fafb')
+      bodyHtml += '</tr>'
+
+      // Level 3: Day rows (hidden by default)
+      wr.dayRows.forEach((dr) => {
+        bodyHtml += `<tr class="${empFoldId}_dy ${wkFoldId}" style="display:none;background:#fff">`
+        bodyHtml += `<td style="text-align:left;padding:1px 4px 1px 40px;font-size:10px;border:1px solid #e5e7eb;white-space:nowrap;position:sticky;left:0;z-index:1;background:#fff;color:#6b7280">${dr.label}</td>`
+        bodyHtml += _bucketCells(dr.buckets, '', 'font-size:10px;background:#fff')
+        bodyHtml += '</tr>'
+      })
+    })
+  })
+
+  // Grand total row (always visible, not foldable)
+  grandContract = Math.round(grandContract * 100) / 100
+  const totalBg = isCard ? '#fef3c7' : '#eef2ff'
+  bodyHtml += `<tr style="background:${totalBg}">`
+  bodyHtml += `<td style="text-align:left;padding:3px 4px;font-size:12px;font-weight:700;border:1px solid #e5e7eb;white-space:nowrap;position:sticky;left:0;z-index:1;background:${totalBg}">Σύνολο</td>`
+  bodyHtml += _bucketCells(grandBuckets, grandContract, `font-weight:700;background:${totalBg}`)
+  bodyHtml += '</tr>'
+
+  return `<table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit;width:100%">
+    <thead>${_buildTableHead(thBg)}</thead><tbody>${bodyHtml}</tbody></table>`
+}
+
+// ─── Export card totals as JSON ───────────────────────────────────────────
+
+const _BUCKET_KEY_MAP = {
+  within: 'entos', additional: 'prostheti', ye: 'yperergasia', yp: 'yperories', illegal: 'paranomes',
+  work: 'ergasimi', holiday: 'argia', sunday: 'kyriaki',
+  day: 'day', night: 'night',
+}
+
+function exportCardTotalsJson() {
+  const monthVal = document.getElementById('summaryMonth').value
+  if (!monthVal) { alert('Επιλέξτε μήνα.'); return }
+  if (!Object.keys(cardData).length) { alert('Δεν υπάρχουν δεδομένα κάρτας.'); return }
+
   const [year, month] = monthVal.split('-').map(Number)
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
@@ -2737,37 +2644,46 @@ function _renderWeekCardSummary(monthVal) {
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
     const mon = getMonday(new Date(d))
     const key = formatDate(mon)
-    if (!seen.has(key)) {
-      seen.add(key)
-      weekStarts.push(mon)
-    }
+    if (!seen.has(key)) { seen.add(key); weekStarts.push(mon) }
   }
 
   const allEmps = _allCardEmployees()
-  if (!allEmps.length) return '<p style="color:#9ca3af;font-size:13px">Δεν υπάρχουν εργαζόμενοι.</p>'
+  const cardtotals = []
 
-  let html = ''
-  weekStarts.forEach((ws) => {
-    const wEnd = new Date(ws)
-    wEnd.setDate(wEnd.getDate() + 6)
-    const rangeStart = ws < firstDay ? firstDay : ws
-    const rangeEnd = wEnd > lastDay ? lastDay : wEnd
-    const label = `${formatDate(rangeStart).slice(5)} — ${formatDate(rangeEnd).slice(5)}`
-    const grandTotals = _emptyBuckets()
-    let totalContract = 0
-    let rows = ''
-    allEmps.forEach((emp) => {
-      const { buckets, contract } = _monthWeekCardBuckets(emp.vat, ws, firstDay, lastDay)
-      rows += _summaryRow(employeeLabel(emp), buckets, false, contract)
-      _aggregateBuckets(grandTotals, buckets)
-      totalContract += contract
+  allEmps.forEach((emp) => {
+    const empId = String(emp.vat)
+    const empBuckets = _emptyBuckets()
+    weekStarts.forEach((ws) => {
+      const { days } = _roundRobinWeek(empId, ws, _classifyCardDayHours)
+      days.forEach((d) => {
+        const dt = parseISODateLocal(d.dateStr)
+        if (dt >= firstDay && dt <= lastDay) _aggregateBuckets(empBuckets, d.buckets)
+      })
     })
-    html += `<div style="margin-bottom:18px">
-      <div style="font-weight:600;font-size:13px;color:#92400e;margin-bottom:4px">Κάρτα Εβδ. ${label}</div>
-      <table style="border-collapse:collapse;border:1px solid #d1d5db;font-family:inherit">
-        ${_cardSummaryTableHead()}<tbody>${rows}${_summaryRow('Σύνολο', grandTotals, true, Math.round(totalContract * 100) / 100)}</tbody></table></div>`
+
+    const entry = { afm: empId }
+    _H_CATS.forEach((c) => {
+      _D_TYPES.forEach((d) => {
+        _T_TYPES.forEach((t) => {
+          const val = empBuckets[`${c}_${d}_${t}`]
+          if (!val) return
+          const jsonKey = `${_BUCKET_KEY_MAP[c]}.${_BUCKET_KEY_MAP[d]}.${_BUCKET_KEY_MAP[t]}`
+          entry[jsonKey] = val
+        })
+      })
+    })
+
+    if (Object.keys(entry).length > 1) cardtotals.push(entry)
   })
-  return html || '<p style="color:#9ca3af;font-size:13px">Δεν βρέθηκαν δεδομένα κάρτας.</p>'
+
+  const result = { period: monthVal, cardtotals }
+  const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `card-totals-${monthVal}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── Patch resetAllData to also reset viewStart ───────────────────────────

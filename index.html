@@ -1142,15 +1142,10 @@
             style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
         </div>
         <div style="display:flex;gap:4px">
-          <button class="btn-secondary btn-sm" id="summaryViewWeek" onclick="renderSummary('week')"
-            style="font-weight:700">Εβδομάδα</button>
-          <button class="btn-secondary btn-sm" id="summaryViewMonth" onclick="renderSummary('month')">Μήνας</button>
-        </div>
-        <div style="display:flex;gap:4px">
-          <button class="btn-secondary btn-sm" id="summaryViewCardWeek" onclick="renderSummary('cardWeek')"
-            style="color:#92400e">Κάρτα Εβδ.</button>
-          <button class="btn-secondary btn-sm" id="summaryViewCardMonth" onclick="renderSummary('cardMonth')"
-            style="color:#92400e">Κάρτα Μήν.</button>
+          <button class="btn-secondary btn-sm" id="summaryViewSchedule" onclick="renderSummary('schedule')"
+            style="font-weight:700">Πρόγραμμα</button>
+          <button class="btn-secondary btn-sm" id="summaryViewCard" onclick="renderSummary('card')"
+            style="color:#92400e">Κάρτα</button>
         </div>
         <button class="btn-primary" onclick="renderSummary()">Εμφάνιση</button>
       </div>
@@ -1158,6 +1153,7 @@
         <p style="color:#9ca3af;font-size:13px">Επιλέξτε μήνα και πατήστε «Εμφάνιση».</p>
       </div>
       <div class="modal-buttons" style="margin-top:16px">
+        <button class="btn-secondary" onclick="exportCardTotalsJson()" style="color:#92400e">Εξαγωγή Κάρτας JSON</button>
         <button class="btn-secondary" onclick="closeModal('summaryModal')">Κλείσιμο</button>
       </div>
     </div>
